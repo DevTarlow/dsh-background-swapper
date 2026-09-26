@@ -18,8 +18,10 @@ glass, and a blur slider frosts the photo behind it.
 - **Tint** — one slider from *Darken 100%* through *None* to *Lighten 100%*,
   applied over the photo.
 - **Element opacity** — fades the application's surfaces (frame, sidebar,
-  cards, popovers) so the photo shows through them. 100% is the untouched
-  default look; menus and dialogs never drop below 90% so they stay readable.
+  cards, popovers) so the photo shows through them. It starts at 50%, so a
+  photo is visible the moment you add one; raise it towards 100% for a more
+  solid interface, or lower it to show more of the photo. Menus and dialogs
+  never drop below 90% so they stay readable either way.
 - **Blur** — 0 to 24 px of frosted glass on the photo.
 - **Turn off** — clears the active background and restores the default
   appearance immediately, without deleting anything.
@@ -149,9 +151,12 @@ Design choices worth knowing before you change it:
 
 - One library per harness home: every browser and desktop window pointed at that
   harness sees the same backgrounds and sliders.
-- The opacity number is a preference, not a measured result. Several nested
-  surfaces paint the same alias, so the composited fade reads slightly stronger
-  than the number, especially below about 40%.
+- The opacity number is a preference, not a measured result, because surfaces
+  stack: the main column shows the photo through one surface, while the sidebar
+  is covered by both the frame and its own column fill, so the sidebar always
+  looks a step more solid than the main column at the same setting. At 100% the
+  interface is fully opaque and the photo is visible only in the strip the
+  columns do not cover, so the panel says so when you leave the slider there.
 - `maxImageBytes` is enforced on the host; `maxDimension` is enforced in the
   browser. A client that skips the downscale can still upload anything under the
   byte cap.

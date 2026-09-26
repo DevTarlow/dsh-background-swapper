@@ -40,7 +40,7 @@ let response = await call('/list')
 assert.equal(response.status, 200)
 let body = await response.json()
 assert.deepEqual(body.items, [])
-assert.deepEqual([body.activeId, body.tint, body.opacity, body.blur], [null, 0, 1, 0])
+assert.deepEqual([body.activeId, body.tint, body.opacity, body.blur], [null, 0, 0.5, 0])
 assert.deepEqual(body.limits, { pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80 })
 
 // ── upload ──────────────────────────────────────────────────────────────────

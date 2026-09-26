@@ -35,8 +35,14 @@ export const IMAGE_TYPES = new Map([
   ['image/avif', 'avif'],
 ])
 
-/** Settings defaults, also the values a fresh library reports. */
-export const DEFAULT_SETTINGS = Object.freeze({ activeId: null, tint: 0, opacity: 1, blur: 0 })
+/**
+ * Settings defaults, also the values a fresh library reports.
+ *
+ * `opacity` starts below 1 on purpose: at 1 the surfaces are exactly as opaque
+ * as the stock interface, so a newly added photo would be completely hidden and
+ * the plugin would look broken.
+ */
+export const DEFAULT_SETTINGS = Object.freeze({ activeId: null, tint: 0, opacity: 0.5, blur: 0 })
 
 /**
  * One stored background's metadata.

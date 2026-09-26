@@ -63,6 +63,7 @@ window.__ModuleLoader__.load({
       tintLighten: percent => `Lighten ${percent}%`,
       opacity: 'Element opacity',
       opacityHint: 'Fades every surface so the photo shows through.',
+      solidHint: 'The interface is fully opaque, so the photo is hidden behind it. Lower Element opacity below to see it.',
       blur: 'Blur',
       reset: 'Reset',
       removeAll: 'Remove all photos',
@@ -97,7 +98,7 @@ window.__ModuleLoader__.load({
       items: [],
       activeId: null,
       tint: 0,
-      opacity: 1,
+      opacity: 0.5,
       blur: 0,
       limits: { pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 },
       error: null,
@@ -725,7 +726,10 @@ window.__ModuleLoader__.load({
                     type: 'button',
                     className: 'dsh-bgs-small',
                     onClick: () => { pick(null) },
-                  }, STRINGS.turnOff)))),
+                  }, STRINGS.turnOff)),
+                state.opacity >= 0.99
+                  ? h('p', { className: 'dsh-bgs-note' }, STRINGS.solidHint)
+                  : null)),
 
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.addPhoto),
