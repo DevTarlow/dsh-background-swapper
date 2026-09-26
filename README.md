@@ -1,111 +1,100 @@
 # Background Swapper
 
-A DeepSeek Harness plugin that sets a photo as the harness background.
+Put your own photo behind the DeepSeek Harness.
 
-**Swap Background** sits directly above Settings in the left sidebar. It opens a
-panel where you upload a photo, give it a name, and keep a paginated library of
-the ones you like. A tint slider darkens or lightens the photo so text stays
-readable over it, an element-opacity slider turns the interface itself into
-glass, and a blur slider frosts the photo behind it.
+![The DeepSeek Harness with an ocean photo showing through the interface](screenshot.png)
 
-## What it does
+**Swap Background** sits just above Settings in the left sidebar. Click it and a
+small panel opens where you add a photo, give it a name, and keep a set of
+favorites. Three sliders control how the photo looks and how much of it shows
+through the interface.
 
-- **Upload and name** — pick a photo or drop one on the panel, then name it
-  before it is saved. The suggested name is the file name.
-- **Library with pagination** — every saved photo appears in a grid, newest
-  first, six to a page, with the active one ringed. Rename or delete any entry,
-  or remove the whole library at once.
-- **Tint** — one slider from *Darken 100%* through *None* to *Lighten 100%*,
-  applied over the photo.
-- **Element opacity** — fades the application's surfaces (frame, sidebar,
-  cards, popovers) so the photo shows through them. It starts at 50%, so a
-  photo is visible the moment you add one; raise it towards 100% for a more
-  solid interface, or lower it to show more of the photo. Menus and dialogs
-  never drop below 90% so they stay readable either way.
-- **Blur** — 0 to 24 px of frosted glass on the photo.
-- **Turn off** — clears the active background and restores the default
-  appearance immediately, without deleting anything.
+## What you can do
 
-Photos and settings live on the host, so the same library and the same look
-appear in every browser and in the desktop app that talks to this harness home.
-
-## Requirements
-
-- DeepSeek Harness with the Web application (the `web` or desktop profile).
-  The plugin needs the harness `webServer` service, so a headless profile
-  cannot activate it.
-- Node 22 or newer, which the harness already requires.
-
-The plugin has **no dependencies**: its host half imports only Node builtins,
-and its browser half imports only React, which the Web shell already supplies.
+- **Add a photo.** Drop one on the panel or pick a file, name it, and it becomes
+  your background.
+- **Keep a library.** Every saved photo is listed in **Recent**, newest first,
+  six to a page. Click one to switch to it.
+- **Rename or delete.** A pencil renames an entry, a bin deletes it, and
+  **Remove all photos** empties the library.
+- **Tint.** One slider from *Darken 100%* to *Lighten 100%*, for when text is
+  hard to read over a bright photo.
+- **Element opacity.** Makes the interface see-through so the photo shows behind
+  it. It starts at 50%.
+- **Blur.** Softens the photo, from 0 to 24 pixels.
+- **Turn off.** Hides the photo and puts the interface back the way it was.
+  Nothing is deleted.
 
 ## Install
 
-Clone this repository anywhere:
+You need the DeepSeek Harness, running either in a browser or in the desktop app.
 
-```sh
-git clone https://github.com/DevTarlow/dsh-background-swapper.git
-```
+1. In the Harness, open **Plugins** in the left sidebar.
+2. Press **Install**.
+3. Paste this repository's address:
 
-Then, in the harness Web UI, open **Plugins** from the left sidebar, choose
-**Install**, and paste one of these:
+   ```
+   https://github.com/DevTarlow/dsh-background-swapper
+   ```
 
-- the absolute path to the clone, for example
-  `/path/to/dsh-background-swapper`
-- the repository URL itself, `https://github.com/DevTarlow/dsh-background-swapper`
-- a published package name, if one exists
+4. Install it, then refresh the page.
 
-Then refresh the page. The same operation from the agent side is
-`plugin_manager` with `action: install_bundle` and that path or spec as `target`.
+If you would rather work from a local copy, clone the repository and paste the
+folder's full path instead. The install dialog accepts a GitHub address, a
+package name, or a local folder.
 
-Installed plugins affect every session in that harness profile and survive
-restart.
+The plugin is added to your Harness, so it stays available in every session until
+you remove it.
 
-## Use
+## Using it
 
 1. Click **Swap Background** above Settings.
-2. Under **Add a photo**, drop an image on the dashed area or press
-   **Choose file**. A photo wider or taller than 2560 px is scaled down first
-   and the panel says so.
-3. Type a name and press **Save**. The photo is stored and becomes the active
-   background immediately.
-4. Tune **Tint**, **Element opacity**, and **Blur** under **Appearance**, the
-   group directly above the library. Slider changes apply as you drag and are
-   written to disk once you stop, so the panel never has a Save button.
-5. Switch photos by clicking any thumbnail in **Recent**. The preview at the top
-   shows the active one; **Turn off** clears it. The pencil button renames an
-   entry in place, the trash button asks before deleting it, and **Remove all
-   photos** empties the library.
+2. Under **Add a photo**, drop an image on the dashed box or press
+   **Choose file**. A photo longer than 2560 pixels on a side is scaled down
+   first, and the panel tells you when that happened.
+3. Type a name and press **Save**. The photo is stored and becomes your
+   background straight away.
+4. Adjust the **Appearance** sliders above the library. They apply as you drag
+   and are saved a moment after you let go, so there is no Save button for them.
+5. Click any thumbnail in **Recent** to switch photos. **Turn off** clears the
+   current one without deleting it.
 
-`Escape` or a click outside closes the panel, and focus returns to the button.
+Press Escape or click anywhere outside the panel to close it.
 
-## Where your photos are stored
+## Your photos
 
-```text
-$DSH_HOME/storages/background-swapper/
-├── index.json          names, the active photo, and the slider values
-└── images/<id>.png     one file per photo
+Your photos live with the Harness, not inside the plugin:
+
+```
+~/.dsh/storages/background-swapper/
+├── index.json      your names, the current photo, and the slider settings
+└── images/         one file per photo
 ```
 
-`$DSH_HOME` defaults to `~/.dsh`. To move your library to another machine, copy
-that whole directory. To start over, delete it — the plugin recreates it on the
-next start.
+The Harness keeps its data in `~/.dsh` unless you have moved it. On Windows the
+folder is `%USERPROFILE%\.dsh\storages\background-swapper`.
 
-## Configuration
+Because the photos are stored there, the same library and the same look appear
+in every browser you open and in the desktop app, as long as they are pointed at
+the same Harness.
 
-Every value has a default; none is required. They are read from the bundle's
-loader row at activation and validated there: an out-of-range or wrongly typed
-value fails the plugin loudly instead of being ignored.
+To back your library up, copy that folder somewhere safe. To start over, delete
+it: the plugin recreates it the next time it loads.
 
-| Field | Default | Accepted | Meaning |
-| --- | --- | --- | --- |
-| `pageSize` | `6` | 1–24 | Photos per page in the library grid. |
-| `maxImageBytes` | `16777216` | 65536–67108864 | Largest accepted upload. Enforced on the host, which refuses anything larger with `413` before storing it. |
-| `maxDimension` | `2560` | 256–8192 | Longest edge the browser scales a photo down to before upload. |
-| `dataDir` | `''` | any path | Library directory. The empty string selects `$DSH_HOME/storages/background-swapper`. A leading `~/` is expanded. |
+## Optional settings
 
-Change them in [cordis.patch.yml](cordis.patch.yml) and restart the harness. A
-profile can also override the row by id in its own patch layer:
+These four values are read from [cordis.patch.yml](cordis.patch.yml) when the
+plugin loads. Change one and restart the Harness.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `pageSize` | `6` | How many photos show per page in **Recent**. |
+| `maxImageBytes` | `16777216` (16 MB) | The largest photo that can be uploaded. |
+| `maxDimension` | `2560` | The longest side a photo is scaled down to before it is saved. |
+| `dataDir` | empty | Where the photos go. Empty means the folder shown above. |
+
+If you would rather keep your own values, put the same override in your Harness
+profile's patch file instead, so a later reinstall cannot replace it:
 
 ```yaml
 - id: background-swapper
@@ -114,112 +103,87 @@ profile can also override the row by id in its own patch layer:
     maxImageBytes: 33554432
 ```
 
-The Plugins page shows no generated settings form for this row, because the
-plugin deliberately declares no configuration schema (that is what keeps its
-host half free of harness package imports). The YAML above is the settings UI.
+A new install starts with **Tint** *None*, **Element opacity** 50%, and **Blur**
+off. The **Reset** link beside each slider returns it to those values.
 
-### The appearance a new library starts from
+## Common questions
 
-The slider positions a library with no stored preferences reports — and the
-positions each **Reset** link restores — are one definition,
-`DEFAULT_SETTINGS` in [store.js](store.js):
+**The photo is too faint, or too strong.** Use **Element opacity**. Lower shows
+more photo, higher makes the interface more solid. At 100% the interface is fully
+opaque and you will only see the photo at the edges, so the panel says so when you
+leave the slider there.
 
-| Slider | Shipped default |
-| --- | --- |
-| Tint | `0` (*None*) |
-| Element opacity | `0.5` (50%) |
-| Blur | `0` px |
+**Text is hard to read over the photo.** Set **Tint** to darken it. Dimming the
+photo helps more than making the interface solid, because you keep the effect.
 
-The host serves them in every `GET /list` response, so the panel's Reset
-controls read the same definition the store applies and cannot drift from it.
-50% is deliberate: at 100% the surfaces are exactly as opaque as the stock
-interface, which hides the photo completely.
+**Why is the sidebar darker than the rest?** Two see-through surfaces sit behind
+the sidebar and only one behind the main area, so at the same slider setting the
+sidebar always looks a little more solid.
 
-These are not deployment settings — they are what a person sees before touching
-anything — so they are a single constant rather than loader-row fields. Change
-the constant and both halves and the tests follow.
+**Does it work in another browser?** Yes. The library and the settings are stored
+with the Harness, so any browser pointed at it sees the same thing.
 
-## How it works
+**Can each session have its own background?** No. One background applies to the
+whole app.
 
-Two files, plus a storage helper:
+**What image types can I use?** PNG, JPEG, WebP, GIF and AVIF. Animated GIFs keep
+animating. SVG files are refused.
 
-| File | Runs | Owns |
+**My photo looks different after uploading.** Anything longer than 2560 pixels on
+a side is scaled down before it is saved, and a scaled photo is re-encoded, which
+drops camera metadata such as the date and location. Animated GIFs are never
+scaled.
+
+## Removing it
+
+Open **Plugins**, find **dsh-background-swapper**, and uninstall it. The interface
+goes back to normal immediately. Your photos stay in the folder above, so delete
+that folder yourself if you also want the disk space back.
+
+## For developers
+
+Two files plus a storage helper, and no build step.
+
+| File | Runs in | Owns |
 | --- | --- | --- |
-| [index.js](index.js) | host | `apply(ctx, config)`, and one `prefix` route at `/__background-swapper` for the library, uploads, renames, deletes, and settings. |
-| [store.js](store.js) | host | `index.json` plus `images/`: atomic index writes, opaque ids, and `unlink` on delete. |
-| [client.js](client.js) | browser | Two slot registrations — the always-mounted painter in `shell.overlay`, and the trigger plus its anchored panel in `sidebar.footer.action`. |
+| [index.js](index.js) | the Harness | `apply(ctx, config)` and the `/__background-swapper` routes |
+| [store.js](store.js) | the Harness | `index.json` and `images/` on disk |
+| [client.js](client.js) | the browser | the background painter and the sidebar panel |
 
-Design choices worth knowing before you change it:
+Things to know before changing it:
 
-- **The background is painted on `html::before`, not on the app's own DOM.** A
-  fixed, oversized pseudo-element at `z-index: -1` carries
-  `linear-gradient(<tint>, <tint>), url(...)`, `background-size: cover`, and the
-  blur filter.
-- **The glass effect redefines theme aliases rather than app styles.** The
-  painter's `<style>` element expresses `--dsw-alias-bg-base`,
-  `--dsw-specific-sidebar-fill`, `--dsw-alias-bg-layer-1|2|3`, and
-  `--dsw-alias-bg-overlay` as `color-mix(in srgb, var(--dsw-static-neutral-bluish-NN) P%, transparent)`,
-  using the same palette tone the theme sheet maps each alias from. No app class
-  name is targeted, so a rename breaks nothing.
-- **Nothing is written outside the React tree.** The painter renders its rules
-  as a `<style>` element, so unmounting the plugin restores the interface
-  exactly. No `document.body` writes, no stylesheet appended by hand.
-- **The browser half imports no harness client package** and hand-writes its own
-  controls against `--dsw-alias-*` theme tokens.
-- **The host half imports only `node:` builtins**, so it loads on a released
-  `dsh` with no workspace resolution or build step.
-
-## Limits and known behavior
-
-- One library per harness home: every browser and desktop window pointed at that
-  harness sees the same backgrounds and sliders.
-- The opacity number is a preference, not a measured result, because surfaces
-  stack: the main column shows the photo through one surface, while the sidebar
-  is covered by both the frame and its own column fill, so the sidebar always
-  looks a step more solid than the main column at the same setting. At 100% the
-  interface is fully opaque and the photo is visible only in the strip the
-  columns do not cover, so the panel says so when you leave the slider there.
-- `maxImageBytes` is enforced on the host; `maxDimension` is enforced in the
-  browser. A client that skips the downscale can still upload anything under the
-  byte cap.
-- Photos that are scaled down are re-encoded as WebP (falling back to JPEG),
-  which drops EXIF metadata. Animated GIFs are never scaled, so they stay
-  animated.
-- PNG, JPEG, WebP, GIF, and AVIF are accepted. SVG is refused: serving an
-  uploaded document from the application's own origin would be a script
-  injection surface.
-- Interface copy is English and lives in one `STRINGS` object at the top of
-  [client.js](client.js), ready for a locale pass.
-- Backgrounds are global, not per session or per workspace.
-
-## Uninstall
-
-Open **Plugins**, find **dsh-background-swapper**, and uninstall it. The
-interface returns to its default appearance at once. Your photos stay in
-`$DSH_HOME/storages/background-swapper`; delete that directory to reclaim the
-space.
-
-## Development
+- **It imports nothing it is not given.** The Harness side uses only Node
+  built-ins and the browser side only React, which the Web shell already
+  provides. That is what lets it load on a released `dsh` with no build.
+- **The photo is painted on `html::before`**, a fixed pseudo-element behind
+  everything, so the application's own elements are left alone.
+- **The see-through effect redefines the theme's background variables**, using
+  `color-mix()` of the same palette tones they already point to. No application
+  class name is targeted, so renaming one breaks nothing.
+- **Everything the plugin adds is React-rendered**, so unloading it restores the
+  interface exactly. Nothing writes to `document.body` or appends a stylesheet
+  by hand.
+- **Uploads are validated and ids are looked up in the index**, so a request can
+  never name a path on disk. `maxImageBytes` is enforced on the Harness side and
+  `maxDimension` in the browser.
+- **The slider defaults live in one place**, `DEFAULT_SETTINGS` in
+  [store.js](store.js), and are served with every `GET /list` so the panel's
+  Reset links cannot drift away from them.
 
 ```sh
 npm test
 ```
 
-runs both verification harnesses and needs no browser:
+Both harnesses run in under a second and need no browser.
+[test/host.test.mjs](test/host.test.mjs) mounts the routes on a bare `node:http`
+server and drives the whole surface over real HTTP.
+[test/client.test.mjs](test/client.test.mjs) loads the browser bundle against a
+stub module loader and checks the registrations and the exact CSS the painter
+emits.
 
-- [test/host.test.mjs](test/host.test.mjs) stubs the Cordis context, mounts the
-  registered route on a bare `node:http` server, and drives the whole route
-  surface over real HTTP — upload, retrieval, rename, settings validation,
-  `404`/`405`/`413`/`415` refusals, restart persistence, delete, and clear-all.
-- [test/client.test.mjs](test/client.test.mjs) loads the browser bundle against
-  a stub module loader and slot registry, asserting both registrations, the
-  single `react` request, the library read at activation, and the exact CSS the
-  painter emits.
-
-After editing, refresh the page in the browser. A change to the host half needs
-a harness restart. [AGENTS.md](AGENTS.md) records the full loop for agents:
-which harness covers which half, the commit style, and that a push happens only
-when you ask for one.
+Edit `client.js` and refresh the page. Edit `index.js`, `store.js` or
+`cordis.patch.yml` and restart the Harness. [AGENTS.md](AGENTS.md) has the full
+loop.
 
 ## License
 
