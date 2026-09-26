@@ -1,0 +1,25 @@
+# Background Swapper — bundle layer.
+#
+# Applied when a profile lists this package as a bundle. The row's `name` is
+# this package's name, so Node resolution finds the installed copy (the loader
+# row and the package must agree); `webServer` is the service the host half
+# registers its image and settings routes on.
+#
+# Every value below is the default the host half applies when the field is
+# omitted, restated so the deployment-varying choices are visible and editable
+# in one place. A profile that wants different values overrides this row by id
+# in its own patch layer.
+- insert:
+    - id: background-swapper
+      name: dsh-background-swapper
+      inject: [webServer]
+      config:
+        # Photos per page in the panel's Recent grid. 1-24.
+        pageSize: 6
+        # Largest accepted upload, in bytes. 65536-67108864.
+        maxImageBytes: 16777216
+        # Longest edge a photo is downscaled to before upload. 256-8192.
+        maxDimension: 2560
+        # Directory holding index.json and images/. '' selects
+        # <DSH_HOME>/storages/background-swapper.
+        dataDir: ''
