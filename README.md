@@ -69,8 +69,9 @@ restart.
    and the panel says so.
 3. Type a name and press **Save**. The photo is stored and becomes the active
    background immediately.
-4. Tune **Tint**, **Element opacity**, and **Blur**. Slider changes apply as you
-   drag and are written to disk once you stop.
+4. Tune **Tint**, **Element opacity**, and **Blur** under **Appearance**, the
+   group directly above the library. Slider changes apply as you drag and are
+   written to disk once you stop, so the panel never has a Save button.
 5. Switch photos by clicking any thumbnail in **Recent**. The preview at the top
    shows the active one; **Turn off** clears it. The pencil button renames an
    entry in place, the trash button asks before deleting it, and **Remove all

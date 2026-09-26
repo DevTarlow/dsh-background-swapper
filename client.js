@@ -41,6 +41,7 @@ window.__ModuleLoader__.load({
       current: 'Current',
       noBackground: 'No background',
       turnOff: 'Turn off',
+      appearance: 'Appearance',
       addPhoto: 'Add a photo',
       dropHint: 'Drop a photo here',
       chooseFile: 'Choose file',
@@ -89,6 +90,13 @@ window.__ModuleLoader__.load({
 
     /** Smallest opacity percent applied to surfaces that must stay readable. */
     const OVERLAY_FLOOR = 90
+
+    /**
+     * The opacity a fresh library starts at. Must match the host's
+     * `DEFAULT_SETTINGS.opacity`, so the slider's reset lands on the same value
+     * a new install begins with.
+     */
+    const DEFAULT_OPACITY = 0.5
 
     // ── shared state ────────────────────────────────────────────────────────
 
@@ -794,6 +802,58 @@ window.__ModuleLoader__.load({
               },
             })),
 
+          // Appearance sits above the library on purpose: the sliders are the
+          // controls a photo is tuned with, and a long grid below them would
+          // push them off the fold.
+          h('section', { className: 'dsh-bgs-section' },
+            h('h3', { className: 'dsh-bgs-heading' }, STRINGS.appearance),
+            h(RangeRow, {
+              label: STRINGS.tint,
+              min: -100,
+              max: 100,
+              value: Math.round(state.tint * 100),
+              readout: tintReadout,
+              onReset: state.tint === 0 ? undefined : () => {
+                publish({ tint: 0 })
+                persistSettings({ tint: 0 })
+              },
+              onChange: next => {
+                publish({ tint: next / 100 })
+                persistSettings({ tint: next / 100 })
+              },
+            }),
+            h(RangeRow, {
+              label: STRINGS.opacity,
+              hint: STRINGS.opacityHint,
+              min: 0,
+              max: 100,
+              value: Math.round(state.opacity * 100),
+              readout: `${Math.round(state.opacity * 100)}%`,
+              onReset: state.opacity === DEFAULT_OPACITY ? undefined : () => {
+                publish({ opacity: DEFAULT_OPACITY })
+                persistSettings({ opacity: DEFAULT_OPACITY })
+              },
+              onChange: next => {
+                publish({ opacity: next / 100 })
+                persistSettings({ opacity: next / 100 })
+              },
+            }),
+            h(RangeRow, {
+              label: STRINGS.blur,
+              min: 0,
+              max: 24,
+              value: state.blur,
+              readout: `${state.blur} px`,
+              onReset: state.blur === 0 ? undefined : () => {
+                publish({ blur: 0 })
+                persistSettings({ blur: 0 })
+              },
+              onChange: next => {
+                publish({ blur: next })
+                persistSettings({ blur: next })
+              },
+            })),
+
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.recent),
             state.items.length === 0
@@ -819,57 +879,7 @@ window.__ModuleLoader__.load({
                       'aria-label': STRINGS.next,
                       disabled: current >= pageCount,
                       onClick: () => { setPage(Math.min(pageCount, current + 1)) },
-                    }, h(Icon, { name: 'right', size: 14 }))))),
-
-          h('section', { className: 'dsh-bgs-section' },
-            h(RangeRow, {
-              label: STRINGS.tint,
-              min: -100,
-              max: 100,
-              value: Math.round(state.tint * 100),
-              readout: tintReadout,
-              onReset: state.tint === 0 ? undefined : () => {
-                publish({ tint: 0 })
-                persistSettings({ tint: 0 })
-              },
-              onChange: next => {
-                publish({ tint: next / 100 })
-                persistSettings({ tint: next / 100 })
-              },
-            })),
-          h('section', { className: 'dsh-bgs-section' },
-            h(RangeRow, {
-              label: STRINGS.opacity,
-              hint: STRINGS.opacityHint,
-              min: 0,
-              max: 100,
-              value: Math.round(state.opacity * 100),
-              readout: `${Math.round(state.opacity * 100)}%`,
-              onReset: state.opacity === 1 ? undefined : () => {
-                publish({ opacity: 1 })
-                persistSettings({ opacity: 1 })
-              },
-              onChange: next => {
-                publish({ opacity: next / 100 })
-                persistSettings({ opacity: next / 100 })
-              },
-            })),
-          h('section', { className: 'dsh-bgs-section' },
-            h(RangeRow, {
-              label: STRINGS.blur,
-              min: 0,
-              max: 24,
-              value: state.blur,
-              readout: `${state.blur} px`,
-              onReset: state.blur === 0 ? undefined : () => {
-                publish({ blur: 0 })
-                persistSettings({ blur: 0 })
-              },
-              onChange: next => {
-                publish({ blur: next })
-                persistSettings({ blur: next })
-              },
-            }))),
+                    }, h(Icon, { name: 'right', size: 14 })))))),
 
         state.items.length === 0
           ? null
@@ -972,6 +982,7 @@ window.__ModuleLoader__.load({
 .dsh-bgs-pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
 .dsh-bgs-pageLabel { font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .dsh-bgs-range { display: flex; flex-direction: column; gap: 6px; }
+.dsh-bgs-range + .dsh-bgs-range { margin-top: 12px; }
 .dsh-bgs-rangeHead { display: flex; align-items: baseline; gap: 8px; }
 .dsh-bgs-rangeLabel { flex: 1 1 auto; min-width: 0; }
 .dsh-bgs-rangeValue { font-size: 12px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }

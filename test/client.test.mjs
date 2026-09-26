@@ -102,4 +102,30 @@ assert.match(css, /body \{ --dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-s
 assert.match(css, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
 assert.match(css, /body\[data-ds-dark-theme\] \{ --dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-950\) 50%, transparent\);/)
 
+// The ends of the opacity slider: 100% restores the stock opaque surfaces
+// (which is why a fresh library must not start there), and 0% leaves the
+// photo bare while menus and dialogs keep their 90% floor.
+const stateWith = opacity => [{
+  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', opacity, blur: 0, tint: 0,
+  limits: {}, error: null, status: 'ready',
+}, () => {}]
+
+hooks.state = () => stateWith(1)
+const opaque = registered[0].component({}).children[0]
+assert.match(opaque, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 100%, transparent\);/)
+// The overlay floor is a minimum, not a cap, so 100% stays the stock value.
+assert.match(opaque, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 100%, transparent\);/)
+assert.doesNotMatch(opaque, /rgba\(0, 0, 0,/)
+
+hooks.state = () => stateWith(0)
+const bare = registered[0].component({}).children[0]
+assert.match(bare, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 0%, transparent\);/)
+assert.match(bare, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
+
+// A tint at the ends of its range: full dark and full light, never opaque.
+hooks.state = () => [{ ...stateWith(0.5)[0], tint: -1 }, () => {}]
+assert.match(registered[0].component({}).children[0], /rgba\(0, 0, 0, 0\.850\)/)
+hooks.state = () => [{ ...stateWith(0.5)[0], tint: 1 }, () => {}]
+assert.match(registered[0].component({}).children[0], /rgba\(255, 255, 255, 0\.850\)/)
+
 console.log('client half: all assertions passed')
