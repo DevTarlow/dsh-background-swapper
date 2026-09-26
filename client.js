@@ -92,11 +92,15 @@ window.__ModuleLoader__.load({
     const OVERLAY_FLOOR = 90
 
     /**
-     * The opacity a fresh library starts at. Must match the host's
-     * `DEFAULT_SETTINGS.opacity`, so the slider's reset lands on the same value
-     * a new install begins with.
+     * Placeholder settings and slider defaults used only until the host answers
+     * with the real ones. The host owns both values: this pair exists so the
+     * panel can paint something coherent during the first request, and it is
+     * overwritten by the first `GET /list` that resolves.
      */
-    const DEFAULT_OPACITY = 0.5
+    const UNKNOWN = Object.freeze({
+      settings: Object.freeze({ tint: 0, opacity: 0.5, blur: 0 }),
+      limits: Object.freeze({ pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 }),
+    })
 
     // ── shared state ────────────────────────────────────────────────────────
 
@@ -105,10 +109,9 @@ window.__ModuleLoader__.load({
       status: 'loading',
       items: [],
       activeId: null,
-      tint: 0,
-      opacity: 0.5,
-      blur: 0,
-      limits: { pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 },
+      ...UNKNOWN.settings,
+      defaults: UNKNOWN.settings,
+      limits: UNKNOWN.limits,
       error: null,
     }
     const listeners = new Set()
@@ -140,6 +143,12 @@ window.__ModuleLoader__.load({
     /** Consume a drag the panel cannot use, so the browser never opens the file. */
     function swallowDrag(event) {
       event.preventDefault()
+    }
+
+    /** Whether a payload member carries a complete set of slider defaults. */
+    function isSettings(value) {
+      return typeof value === 'object' && value !== null
+        && typeof value.tint === 'number' && typeof value.opacity === 'number' && typeof value.blur === 'number'
     }
 
     // ── host transport ──────────────────────────────────────────────────────
@@ -174,9 +183,10 @@ window.__ModuleLoader__.load({
         status: 'ready',
         items: Array.isArray(payload.items) ? payload.items : [],
         activeId: typeof payload.activeId === 'string' ? payload.activeId : null,
-        tint: typeof payload.tint === 'number' ? payload.tint : 0,
-        opacity: typeof payload.opacity === 'number' ? payload.opacity : 1,
-        blur: typeof payload.blur === 'number' ? payload.blur : 0,
+        tint: typeof payload.tint === 'number' ? payload.tint : UNKNOWN.settings.tint,
+        opacity: typeof payload.opacity === 'number' ? payload.opacity : UNKNOWN.settings.opacity,
+        blur: typeof payload.blur === 'number' ? payload.blur : UNKNOWN.settings.blur,
+        defaults: isSettings(payload.defaults) ? payload.defaults : snapshot.defaults,
         limits: payload.limits === undefined ? snapshot.limits : { ...snapshot.limits, ...payload.limits },
         error: null,
       })
@@ -813,9 +823,9 @@ window.__ModuleLoader__.load({
               max: 100,
               value: Math.round(state.tint * 100),
               readout: tintReadout,
-              onReset: state.tint === 0 ? undefined : () => {
-                publish({ tint: 0 })
-                persistSettings({ tint: 0 })
+              onReset: state.tint === state.defaults.tint ? undefined : () => {
+                publish({ tint: state.defaults.tint })
+                persistSettings({ tint: state.defaults.tint })
               },
               onChange: next => {
                 publish({ tint: next / 100 })
@@ -829,9 +839,9 @@ window.__ModuleLoader__.load({
               max: 100,
               value: Math.round(state.opacity * 100),
               readout: `${Math.round(state.opacity * 100)}%`,
-              onReset: state.opacity === DEFAULT_OPACITY ? undefined : () => {
-                publish({ opacity: DEFAULT_OPACITY })
-                persistSettings({ opacity: DEFAULT_OPACITY })
+              onReset: state.opacity === state.defaults.opacity ? undefined : () => {
+                publish({ opacity: state.defaults.opacity })
+                persistSettings({ opacity: state.defaults.opacity })
               },
               onChange: next => {
                 publish({ opacity: next / 100 })
@@ -844,9 +854,9 @@ window.__ModuleLoader__.load({
               max: 24,
               value: state.blur,
               readout: `${state.blur} px`,
-              onReset: state.blur === 0 ? undefined : () => {
-                publish({ blur: 0 })
-                persistSettings({ blur: 0 })
+              onReset: state.blur === state.defaults.blur ? undefined : () => {
+                publish({ blur: state.defaults.blur })
+                persistSettings({ blur: state.defaults.blur })
               },
               onChange: next => {
                 publish({ blur: next })

@@ -41,6 +41,9 @@ assert.equal(response.status, 200)
 let body = await response.json()
 assert.deepEqual(body.items, [])
 assert.deepEqual([body.activeId, body.tint, body.opacity, body.blur], [null, 0, 0.5, 0])
+// A fresh library starts from the shipped appearance defaults, and reports
+// them so the panel's Reset controls land there instead of on a literal.
+assert.deepEqual(body.defaults, { tint: 0, opacity: 0.5, blur: 0 })
 assert.deepEqual(body.limits, { pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80 })
 
 // ── upload ──────────────────────────────────────────────────────────────────
@@ -94,6 +97,8 @@ response = await call('/state', {
 assert.equal(response.status, 200)
 body = await response.json()
 assert.deepEqual([body.tint, body.opacity, body.blur], [-0.4, 0.6, 8])
+// Changing the current settings must not move what a Reset restores.
+assert.deepEqual(body.defaults, { tint: 0, opacity: 0.5, blur: 0 })
 
 for (const bad of [{ tint: 4 }, { opacity: -1 }, { blur: 'x' }, { activeId: 'nope' }]) {
   const refused = await call('/state', {

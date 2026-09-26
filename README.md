@@ -118,6 +118,27 @@ The Plugins page shows no generated settings form for this row, because the
 plugin deliberately declares no configuration schema (that is what keeps its
 host half free of harness package imports). The YAML above is the settings UI.
 
+### The appearance a new library starts from
+
+The slider positions a library with no stored preferences reports — and the
+positions each **Reset** link restores — are one definition,
+`DEFAULT_SETTINGS` in [store.js](store.js):
+
+| Slider | Shipped default |
+| --- | --- |
+| Tint | `0` (*None*) |
+| Element opacity | `0.5` (50%) |
+| Blur | `0` px |
+
+The host serves them in every `GET /list` response, so the panel's Reset
+controls read the same definition the store applies and cannot drift from it.
+50% is deliberate: at 100% the surfaces are exactly as opaque as the stock
+interface, which hides the photo completely.
+
+These are not deployment settings — they are what a person sees before touching
+anything — so they are a single constant rather than loader-row fields. Change
+the constant and both halves and the tests follow.
+
 ## How it works
 
 Two files, plus a storage helper:

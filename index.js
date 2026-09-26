@@ -5,7 +5,7 @@
  * and exposes both to the browser half over one HTTP route table under
  * `/__background-swapper`:
  *
- * - `GET    /list`            the library, the current settings, and the limits
+ * - `GET    /list`            the library, the current settings, the defaults, and the limits
  * - `POST   /images`          one uploaded image (raw body, name in a header)
  * - `DELETE /images`          remove every stored image
  * - `GET    /images/<id>`     the stored bytes, immutably cacheable
@@ -26,7 +26,8 @@ import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
-  IMAGE_TYPES, MAX_NAME_LENGTH, createStore, normalizeBlur, normalizeName, normalizeOpacity, normalizeTint,
+  DEFAULT_SETTINGS, IMAGE_TYPES, MAX_NAME_LENGTH, createStore, normalizeBlur, normalizeName, normalizeOpacity,
+  normalizeTint,
 } from './store.js'
 
 /** Stable Cordis plugin name, matching the bundle row id. */
@@ -279,6 +280,13 @@ export async function apply(ctx, config) {
     ok: true,
     items: store.list(),
     ...store.settings(),
+    // The slider positions a library with no stored preferences reports. The
+    // panel's Reset controls land here, so both halves read one definition.
+    defaults: {
+      tint: DEFAULT_SETTINGS.tint,
+      opacity: DEFAULT_SETTINGS.opacity,
+      blur: DEFAULT_SETTINGS.blur,
+    },
     limits: {
       pageSize: resolved.pageSize,
       maxImageBytes: resolved.maxImageBytes,
