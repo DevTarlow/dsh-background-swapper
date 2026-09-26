@@ -2,7 +2,12 @@
 
 Put your own photo behind the DeepSeek Harness.
 
-![The DeepSeek Harness with an ocean photo showing through the interface](screenshot.png)
+<p>
+  <img src="screenshot.png" width="48%" alt="The DeepSeek Harness with an ocean photo behind the interface">
+  <img src="screenshot3.png" width="48%" alt="The DeepSeek Harness with a blurred space photo behind the interface">
+</p>
+
+Two different backgrounds. The space photo on the right has **Blur** turned up.
 
 **Swap Background** sits just above Settings in the left sidebar. Click it and a
 small panel opens where you add a photo, give it a name, and keep a set of
