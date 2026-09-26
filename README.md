@@ -48,6 +48,8 @@ you remove it.
 
 ## Using it
 
+![The Background panel: the current photo, the upload area, the three Appearance sliders, and the Recent library](screenshot2.png)
+
 1. Click **Swap Background** above Settings.
 2. Under **Add a photo**, drop an image on the dashed box or press
    **Choose file**. A photo longer than 2560 pixels on a side is scaled down
