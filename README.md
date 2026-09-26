@@ -196,7 +196,9 @@ runs both verification harnesses and needs no browser:
   painter emits.
 
 After editing, refresh the page in the browser. A change to the host half needs
-a harness restart.
+a harness restart. [AGENTS.md](AGENTS.md) records the full loop for agents:
+which harness covers which half, the commit style, and that a push happens only
+when you ask for one.
 
 ## License
 
