@@ -74,3 +74,36 @@ the user to say push. When asked, push the current branch to `origin`.
 This repository is not a stack and has no CI-gated merge queue, so there is no
 `gh stack sync`, rebase, or history-rewrite step. If a push is rejected because
 the remote moved, fetch and report instead of forcing.
+
+## Releasing
+
+Nothing is published to a registry — `"private": true` is set, and people install
+this repository by address — so a release is a version, an annotated tag whose
+message is the note, and a GitHub Release written for users.
+
+Bump `"version"` in `package.json`, the one place a version is written. Pre-1.0,
+a release that adds or changes behavior moves the minor; a fix-only release moves
+the patch. Commit the bump on its own, then tag that commit and publish:
+
+```sh
+git tag -a v0.2.0 -F -     # the release note, read from stdin
+gh release create v0.2.0 --title v0.2.0 --notes-file notes.md
+git push origin main && git push origin v0.2.0
+```
+
+`gh release create` is the step that puts it on `/releases` and marks it
+**Latest**; pushing the tag alone only fills `/tags`, which is where a release
+goes missing without anyone noticing. Write the notes to a scratch file and
+delete it afterwards, so no draft copy is committed, and write them in the voice
+of `README.md` rather than this file: what changed, what an upgrade does to a
+stored `index.json`, the fixes, and the install pin
+(`https://github.com/DevTarlow/dsh-background-swapper#v0.2.0`).
+
+A release happens when the user asks for one, never at the end of a task, and
+only from a tree whose `npm test` is green — the two harnesses are the whole
+gate. When the release touched the host half, the running Harness has to be
+restarted before those routes are live; say so when handing back.
+
+The README's screenshots are the one shipped artifact no harness checks: a panel
+change leaves them stale, and refreshing them needs eyes on a running Harness.
+Take them when that is possible, and say plainly when it is not.
