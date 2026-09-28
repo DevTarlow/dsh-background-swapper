@@ -4,7 +4,7 @@
  * The library is one JSON index beside the image files it describes:
  *
  * ```text
- * <dir>/index.json          { version, items[], activeId, tint, backgroundOpacity, elementOpacity, sidebarOpacity, blur }
+ * <dir>/index.json          { version, items[], activeId, tint, backgroundOpacity, elementOpacity, sidebarOpacity, blur, presets[] }
  * <dir>/images/<id>.<ext>   one file per item, named by the item's opaque id
  * ```
  *
@@ -25,6 +25,12 @@ export const STORE_VERSION = 1
 
 /** Largest display name kept, in characters. */
 export const MAX_NAME_LENGTH = 80
+
+/** Largest number of saved looks a library keeps. */
+export const MAX_PRESETS = 6
+
+/** Largest saved-look name kept, in characters. It labels a chip, not a page. */
+export const MAX_PRESET_NAME_LENGTH = 24
 
 /** Accepted upload media types mapped to the file extension each is stored under. */
 export const IMAGE_TYPES = new Map([
@@ -124,6 +130,60 @@ export function normalizeBlur(value) {
 }
 
 /**
+ * A look someone saved: the three alphas, and nothing else.
+ *
+ * Tint and Blur describe the photo rather than the interface, and the shipped
+ * presets leave them alone so a preset never undoes a tuned photo. Saved looks
+ * keep to the same contract, which is also what makes loading one after trying
+ * Glass restore everything Glass could have changed.
+ *
+ * @typedef {object} SavedPreset
+ * @property {string} id - Opaque identifier, unique within the list.
+ * @property {string} name - Label the person typed, at most {@link MAX_PRESET_NAME_LENGTH} characters.
+ * @property {number} backgroundOpacity - Alpha of the ground, 0 to 1.
+ * @property {number} elementOpacity - Alpha of the panels, 0 to 1.
+ * @property {number} sidebarOpacity - Alpha of the left column, 0 to 1.
+ */
+
+/**
+ * Normalize a saved-look list.
+ *
+ * A value that is not a list, or one longer than {@link MAX_PRESETS}, is
+ * refused whole so the caller can report it. A single entry that is unusable is
+ * dropped and the rest are kept, the way the index treats an unusable image
+ * record, so one bad line cannot cost someone every look they saved.
+ *
+ * @param {unknown} value - Candidate list.
+ * @returns {SavedPreset[] | undefined} The normalized list, or undefined when the list's own shape is wrong.
+ */
+export function normalizePresets(value) {
+  if (!Array.isArray(value) || value.length > MAX_PRESETS) return undefined
+  const presets = []
+  const seen = new Set()
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const { id, backgroundOpacity, elementOpacity, sidebarOpacity } =
+      /** @type {Record<string, unknown>} */ (raw)
+    if (typeof id !== 'string' || id === '' || seen.has(id)) continue
+    const name = normalizeName(raw.name)
+    if (name === undefined) continue
+    const background = normalizeOpacity(backgroundOpacity)
+    const element = normalizeOpacity(elementOpacity)
+    const sidebar = normalizeOpacity(sidebarOpacity)
+    if (background === undefined || element === undefined || sidebar === undefined) continue
+    seen.add(id)
+    presets.push({
+      id,
+      name: name.length > MAX_PRESET_NAME_LENGTH ? name.slice(0, MAX_PRESET_NAME_LENGTH) : name,
+      backgroundOpacity: background,
+      elementOpacity: element,
+      sidebarOpacity: sidebar,
+    })
+  }
+  return presets
+}
+
+/**
  * Rebuild one item from stored JSON.
  * @param {unknown} raw - Candidate value from the index.
  * @returns {BackgroundItem | undefined} The item, or undefined when a required field is missing or wrong.
@@ -155,6 +215,8 @@ export async function createStore({ dir, warn }) {
   let items = []
   /** @type {Settings} */
   let settings = { ...DEFAULT_SETTINGS }
+  /** @type {SavedPreset[]} */
+  let presets = []
   let writeChain = Promise.resolve()
 
   await mkdir(imagesDir, { recursive: true })
@@ -213,6 +275,11 @@ export async function createStore({ dir, warn }) {
         ?? DEFAULT_SETTINGS.sidebarOpacity,
       blur: normalizeBlur(parsed.blur) ?? DEFAULT_SETTINGS.blur,
     }
+    const savedPresets = normalizePresets(parsed.presets)
+    presets = savedPresets ?? []
+    if (parsed.presets !== undefined && savedPresets === undefined) {
+      warn('saved looks were not a readable list; starting with none')
+    }
     if (discarded > 0) warn(`discarded ${String(discarded)} index record(s) that had no usable image`)
   }
 
@@ -231,7 +298,7 @@ export async function createStore({ dir, warn }) {
 
   /** Publish the index through a temporary file so a crash cannot truncate it. */
   function persist() {
-    const document = JSON.stringify({ version: STORE_VERSION, items, ...settings }, null, 2)
+    const document = JSON.stringify({ version: STORE_VERSION, items, ...settings, presets }, null, 2)
     return writeFile(`${indexPath}.tmp`, `${document}\n`, 'utf8')
       .then(() => rename(`${indexPath}.tmp`, indexPath))
   }
@@ -380,6 +447,26 @@ export async function createStore({ dir, warn }) {
         if (patch.sidebarOpacity !== undefined) settings.sidebarOpacity = patch.sidebarOpacity
         if (patch.blur !== undefined) settings.blur = patch.blur
         return { ...settings }
+      })
+    },
+
+    /**
+     * The saved looks, oldest first.
+     * @returns {SavedPreset[]} A detached copy.
+     */
+    presets() {
+      return presets.map(preset => ({ ...preset }))
+    },
+
+    /**
+     * Replace the whole saved-look list, the way the panel's own writes do.
+     * @param {SavedPreset[]} next - An already-normalized list.
+     * @returns {Promise<SavedPreset[]>} The stored list.
+     */
+    async updatePresets(next) {
+      return serialize(() => {
+        presets = next.map(preset => ({ ...preset }))
+        return presets.map(preset => ({ ...preset }))
       })
     },
   }

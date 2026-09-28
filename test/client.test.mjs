@@ -8,7 +8,7 @@
  * harness; not shipped.
  */
 import assert from 'node:assert/strict'
-import { DEFAULT_SETTINGS } from '../store.js'
+import { DEFAULT_SETTINGS, MAX_PRESETS, MAX_PRESET_NAME_LENGTH } from '../store.js'
 
 let captured = null
 globalThis.window = { __ModuleLoader__: { load: registration => { captured = registration } } }
@@ -51,13 +51,19 @@ const shipped = {
   sidebarOpacity: DEFAULT_SETTINGS.sidebarOpacity,
   blur: DEFAULT_SETTINGS.blur,
 }
+/** The parts of `GET /list` a later assertion varies; the settings stay put. */
+const served = {
+  presets: [],
+  limits: { pageSize: 6, maxPresets: MAX_PRESETS, maxPresetNameLength: MAX_PRESET_NAME_LENGTH },
+}
 globalThis.fetch = async (url, options) => {
   reads.push({ url, options })
   return {
     ok: true,
     status: 200,
     json: async () => ({
-      ok: true, items: [], activeId: null, ...shipped, defaults: { ...shipped }, limits: { pageSize: 6 },
+      ok: true, items: [], activeId: null, ...shipped, defaults: { ...shipped },
+      presets: served.presets, limits: served.limits,
     }),
     text: async () => '',
   }
@@ -166,14 +172,20 @@ assert.match(registered[0].component({}).children[0], /rgba\(255, 255, 255, 0\.8
 // snapshots. Run the factory a second time against a stub that hands every hook
 // its own initial value and reports the panel as open and already placed, so the
 // button tree can be walked and driven without a DOM. The hook order inside the
-// component is snapshot, open, anchor, which is what the counter targets.
+// component is snapshot, open, anchor, page, draft, renaming, confirming,
+// dragging, savingPreset; the counter targets the three this harness has to
+// seed, because a stub setter cannot open the panel or start a naming step.
 let hookCall = 0
+let savingPresetSeed = null
 const PanelReact = {
   createElement: (type, props, ...children) => ({ type, props, children }),
   useState: initial => {
     hookCall += 1
     if (hookCall === 2) return [true, () => {}]
     if (hookCall === 3) return [{ left: 8, bottom: 8, maxHeight: 640 }, () => {}]
+    // Held until the harness clears it, the way a real setter would keep the
+    // step open until the name is saved or cancelled.
+    if (hookCall === 9 && savingPresetSeed !== null) return [savingPresetSeed, () => {}]
     return [typeof initial === 'function' ? initial() : initial, () => {}]
   },
   useEffect: () => {},
@@ -229,22 +241,25 @@ assert.equal(sliderProps('Background opacity').value, Math.round(DEFAULT_SETTING
 assert.equal(sliderProps('Element opacity').value, Math.round(DEFAULT_SETTINGS.elementOpacity * 100))
 assert.equal(sliderProps('Sidebar opacity').value, Math.round(DEFAULT_SETTINGS.sidebarOpacity * 100))
 
-// One click moves every alpha in one write and leaves the photo controls where
-// they were. The write is debounced, so run its timer at once rather than
-// waiting the delay out.
-const realSetTimeout = globalThis.setTimeout
-let flushPersist = null
-globalThis.setTimeout = (fn, _delay, ...args) => { flushPersist = () => { fn(...args) }; return 0 }
-buttons[1].props.onClick()
-globalThis.setTimeout = realSetTimeout
-flushPersist()
-await new Promise(resolve => { realSetTimeout(resolve, 0) })
+// Every write is debounced, so run the pending timer at once instead of
+// waiting the delay out. The stub can only ever hold one, which is enough.
+const writes = () => reads
+  .filter(read => read.url === '/__background-swapper/state')
+  .map(read => JSON.parse(read.options.body))
 
-const written = reads.find(read => read.url === '/__background-swapper/state')
-assert.deepEqual(
-  JSON.parse(written.options.body),
-  { backgroundOpacity: 0.05, elementOpacity: 0.5, sidebarOpacity: 0.5 },
-)
+async function flushWrite(act) {
+  const real = globalThis.setTimeout
+  let flush = null
+  globalThis.setTimeout = (fn, _delay, ...args) => { flush = () => { fn(...args) }; return 0 }
+  act()
+  globalThis.setTimeout = real
+  flush?.()
+  await new Promise(resolve => { real(resolve, 0) })
+}
+
+// One click moves every alpha in one write and leaves the photo controls alone.
+await flushWrite(() => { buttons[1].props.onClick() })
+assert.deepEqual(writes().at(-1), { backgroundOpacity: 0.05, elementOpacity: 0.5, sidebarOpacity: 0.5 })
 buttons = presetButtons()
 assert.equal(buttons[1].props['aria-pressed'], true)
 assert.equal(sliderProps('Background opacity').value, 5)
@@ -252,5 +267,82 @@ assert.equal(sliderProps('Element opacity').value, 50)
 assert.equal(sliderProps('Sidebar opacity').value, 50)
 assert.equal(sliderProps('Tint').value, Math.round(DEFAULT_SETTINGS.tint * 100))
 assert.equal(sliderProps('Blur').value, DEFAULT_SETTINGS.blur)
+
+// The row offers to keep the current sliders as a look of one's own, and never
+// withholds that while there is room for another.
+const saveButton = () => findAll(
+  renderPanel(),
+  node => node.type === 'button' && node.props?.className?.includes('dsh-bgs-presetAdd'),
+)[0]
+assert.equal(saveButton().children[0], 'Save current')
+assert.equal(saveButton().props.disabled, undefined)
+
+// Move a slider off every shipped look, which is the state worth keeping.
+await flushWrite(() => { sliderProps('Background opacity').onChange(37) })
+
+// Naming step: the stub seeds it, and its own Save appends the look.
+savingPresetSeed = { name: 'Night' }
+const formInput = findAll(
+  renderPanel(),
+  node => node.type === 'input' && node.props?.['aria-label'] === 'Look name',
+)[0]
+assert.equal(formInput.props.value, 'Night')
+assert.equal(formInput.props.maxLength, MAX_PRESET_NAME_LENGTH)
+const formSave = findAll(
+  renderPanel(),
+  node => node.type === 'button' && node.props?.className === 'dsh-bgs-primary',
+)[0]
+await flushWrite(() => { formSave.props.onClick() })
+savingPresetSeed = null
+
+const kept = writes().at(-1)
+assert.equal(kept.presets.length, 1)
+assert.equal(kept.presets[0].name, 'Night')
+assert.deepEqual(
+  [kept.presets[0].backgroundOpacity, kept.presets[0].elementOpacity, kept.presets[0].sidebarOpacity],
+  [0.37, 0.5, 0.5],
+)
+assert.deepEqual(
+  presetButtons().map(button => button.children[0]),
+  ['Wallpaper', 'Glass', 'Solid', 'Night'],
+)
+
+// The point of the whole thing: try Glass, then come back to the saved look.
+const namedButton = name => presetButtons().find(button => button.children[0] === name)
+await flushWrite(() => { namedButton('Glass').props.onClick() })
+assert.equal(sliderProps('Background opacity').value, 5)
+await flushWrite(() => { namedButton('Night').props.onClick() })
+assert.equal(sliderProps('Background opacity').value, 37)
+assert.equal(sliderProps('Element opacity').value, 50)
+assert.equal(sliderProps('Sidebar opacity').value, 50)
+
+// A saved look carries its own remove control, which writes the list without it.
+const removeButton = findAll(
+  renderPanel(),
+  node => node.type === 'button' && node.props?.className === 'dsh-bgs-presetDelete',
+)[0]
+assert.equal(removeButton.props['aria-label'], 'Delete Night')
+await flushWrite(() => { removeButton.props.onClick() })
+assert.deepEqual(writes().at(-1), { presets: [] })
+assert.deepEqual(presetButtons().map(button => button.children[0]), ['Wallpaper', 'Glass', 'Solid'])
+
+// At the limit the row stops offering to save and says why in words, rather
+// than leaving a control that cannot be used and cannot explain itself.
+served.presets = [{ id: 'look-only', name: 'Only', backgroundOpacity: 0.3, elementOpacity: 0.3, sidebarOpacity: 0.3 }]
+served.limits = { pageSize: 6, maxPresets: 1, maxPresetNameLength: MAX_PRESET_NAME_LENGTH }
+panelPlugin.apply({
+  slots: {
+    inject: (key, callback) => { callback() },
+    register: () => () => {},
+  },
+})
+await new Promise(resolve => { setTimeout(resolve, 0) })
+
+assert.equal(saveButton(), undefined)
+const limitNotes = findAll(
+  renderPanel(),
+  node => node.type === 'p' && String(node.children?.[0] ?? '').includes('Remove one to save another'),
+)
+assert.equal(limitNotes.length, 1, 'the limit has to explain how to get past it')
 
 console.log('client half: all assertions passed')

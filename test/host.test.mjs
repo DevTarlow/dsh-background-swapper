@@ -47,7 +47,12 @@ assert.deepEqual(
 // A fresh library starts from the shipped appearance defaults, and reports
 // them so the panel's Reset controls land there instead of on a literal.
 assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, sidebarOpacity: 0.85, blur: 0 })
-assert.deepEqual(body.limits, { pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80 })
+assert.deepEqual(body.limits, {
+  pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80,
+  maxPresets: 6, maxPresetNameLength: 24,
+})
+// A fresh library has the three looks the panel ships and none of its own.
+assert.deepEqual(body.presets, [])
 
 // ── upload ──────────────────────────────────────────────────────────────────
 response = await call('/images', {
@@ -106,6 +111,60 @@ assert.deepEqual(
 // Changing the current settings must not move what a Reset restores.
 assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, sidebarOpacity: 0.85, blur: 0 })
 
+// ── saved looks ─────────────────────────────────────────────────────────────
+// A look is the three alphas and a name; the whole list is replaced in one
+// write, the way the panel saves, renames and deletes.
+const SAVED = [
+  { id: 'look-a', name: 'Night', backgroundOpacity: 0.1, elementOpacity: 0.6, sidebarOpacity: 0.95 },
+  { id: 'look-b', name: 'Bright', backgroundOpacity: 0.5, elementOpacity: 0.9, sidebarOpacity: 0.9 },
+]
+response = await call('/state', {
+  method: 'PATCH',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ presets: SAVED }),
+})
+assert.equal(response.status, 200)
+body = await response.json()
+assert.deepEqual(body.presets, SAVED)
+// Saving a look must not disturb the sliders it was read from.
+assert.deepEqual(
+  [body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity],
+  [0.6, 0.8, 0.9],
+)
+
+// One unusable entry is dropped and the rest are kept, the way the index
+// treats an unusable image record.
+response = await call('/state', {
+  method: 'PATCH',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    presets: [SAVED[0], { id: 'look-c', name: 'Broken', elementOpacity: 0.5 }, 'nonsense'],
+  }),
+})
+assert.equal(response.status, 200)
+body = await response.json()
+assert.deepEqual(body.presets, [SAVED[0]])
+
+for (const bad of [
+  { presets: 'nope' },
+  { presets: Array.from({ length: 7 }, (unused, index) => ({ ...SAVED[0], id: `look-${String(index)}` })) },
+]) {
+  const refused = await call('/state', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(bad),
+  })
+  assert.equal(refused.status, 400, `expected 400 for ${JSON.stringify(bad).slice(0, 40)}`)
+}
+
+// Put the list back for the restart check below.
+response = await call('/state', {
+  method: 'PATCH',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ presets: SAVED }),
+})
+assert.equal(response.status, 200)
+
 for (const bad of [
   { tint: 4 }, { backgroundOpacity: -1 }, { elementOpacity: 2 }, { sidebarOpacity: 'x' },
   { blur: 'x' }, { activeId: 'nope' },
@@ -156,6 +215,7 @@ assert.deepEqual(
   [body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
   [-0.4, 0.6, 0.8, 0.9, 8],
 )
+assert.deepEqual(body.presets, SAVED)
 
 // ── delete one, then clear the rest ─────────────────────────────────────────
 response = await call(`/images/${id}`, { method: 'DELETE' })
@@ -192,6 +252,7 @@ assert.deepEqual(
   [indexFile.tint, indexFile.backgroundOpacity, indexFile.elementOpacity, indexFile.sidebarOpacity, indexFile.blur],
   [-0.4, 0.6, 0.8, 0.9, 8],
 )
+assert.deepEqual(indexFile.presets, SAVED)
 
 // ── indexes written before every slider had its own field ───────────────────
 // `opacity` was the single alpha every surface shared, and the sidebar later
@@ -209,6 +270,7 @@ assert.deepEqual(
   [body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
   [-0.2, 0.2, 0.3, 0.3, 4],
 )
+assert.deepEqual(body.presets, [])
 
 // The shape the previous release wrote: the two sliders it had, no sidebar.
 const splitDir = await mkdtemp(join(tmpdir(), 'bgs-split-'))

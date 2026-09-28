@@ -11,7 +11,7 @@
  * - `GET    /images/<id>`     the stored bytes, immutably cacheable
  * - `PATCH  /images/<id>`     rename
  * - `DELETE /images/<id>`     delete
- * - `PATCH  /state`           active background, tint, the surface alphas, blur
+ * - `PATCH  /state`           active background, tint, the surface alphas, blur, saved looks
  *
  * The module imports `node:` builtins only: it must load on a released `dsh`,
  * where no workspace resolution or build step is available for an out-of-tree
@@ -26,8 +26,8 @@ import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
-  DEFAULT_SETTINGS, IMAGE_TYPES, MAX_NAME_LENGTH, createStore, normalizeBlur, normalizeName, normalizeOpacity,
-  normalizeTint,
+  DEFAULT_SETTINGS, IMAGE_TYPES, MAX_NAME_LENGTH, MAX_PRESETS, MAX_PRESET_NAME_LENGTH, createStore, normalizeBlur,
+  normalizeName, normalizeOpacity, normalizePresets, normalizeTint,
 } from './store.js'
 
 /** Stable Cordis plugin name, matching the bundle row id. */
@@ -280,6 +280,8 @@ export async function apply(ctx, config) {
     ok: true,
     items: store.list(),
     ...store.settings(),
+    // The looks someone saved, beside the three the panel ships with.
+    presets: store.presets(),
     // The slider positions a library with no stored preferences reports. The
     // panel's Reset controls land here, so both halves read one definition.
     defaults: {
@@ -294,6 +296,8 @@ export async function apply(ctx, config) {
       maxImageBytes: resolved.maxImageBytes,
       maxDimension: resolved.maxDimension,
       maxNameLength: MAX_NAME_LENGTH,
+      maxPresets: MAX_PRESETS,
+      maxPresetNameLength: MAX_PRESET_NAME_LENGTH,
     },
   })
 
@@ -318,6 +322,8 @@ export async function apply(ctx, config) {
     const body = /** @type {Record<string, unknown>} */ (await readJson(req))
     /** @type {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, sidebarOpacity?: number, blur?: number }} */
     const patch = {}
+    /** @type {import('./store.js').SavedPreset[] | undefined} */
+    let savedPresets
     if ('activeId' in body) {
       const activeId = body.activeId
       if (activeId !== null && typeof activeId !== 'string') {
@@ -353,7 +359,15 @@ export async function apply(ctx, config) {
       if (blur === undefined) return writeText(res, 400, 'blur must be a number from 0 to 24')
       patch.blur = blur
     }
+    if ('presets' in body) {
+      const presets = normalizePresets(body.presets)
+      if (presets === undefined) {
+        return writeText(res, 400, `presets must be a list of at most ${String(MAX_PRESETS)} saved looks`)
+      }
+      savedPresets = presets
+    }
     await store.updateSettings(patch)
+    if (savedPresets !== undefined) await store.updatePresets(savedPresets)
     writeJson(res, 200, library())
   }
 

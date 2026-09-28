@@ -12,8 +12,8 @@ Two different backgrounds. The space photo on the right has **Blur** turned up.
 **Swap Background** sits just above Settings in the left sidebar. Click it and a
 small panel opens where you add a photo, give it a name, and keep a set of
 favorites. Three presets set the balance between the interface and the photo in
-one click, and five sliders fine-tune how the photo looks and how much of it
-shows through.
+one click, five sliders fine-tune how the photo looks and how much of it shows
+through, and any balance you like can be saved under its own name.
 
 ## What you can do
 
@@ -26,6 +26,10 @@ shows through.
 - **Presets.** **Wallpaper**, **Glass** and **Solid** set all three opacity
   sliders at once, and the one you are on stays lit. **Tint** and **Blur** are
   left alone, so trying a preset never undoes a photo you tuned.
+- **Save your own look.** **Save current** in the same row keeps the three
+  opacities under a name you choose, so you can try **Glass** and get your own
+  balance back in one click. Your looks sit in the row beside the shipped ones,
+  each with a small × to remove it, and up to six are kept.
 - **Background opacity.** How solid the page behind everything is. Lower it and
   the photo fills the open space; at 0% the photo is bare. It starts at 20%.
 - **Element opacity.** How solid the cards, inputs and menus over that page are.
@@ -74,7 +78,8 @@ you remove it.
 4. Start from a preset in **Appearance** — **Wallpaper**, **Glass** or
    **Solid** — then adjust the sliders above the library. Everything applies as
    you drag and is saved a moment after you let go, so there is no Save button
-   for any of it.
+   for any of it. Once you like what you see, press **Save current**, type a
+   name and press **Save** to keep that balance for later.
 5. Click any thumbnail in **Recent** to switch photos. **Turn off** clears the
    current one without deleting it.
 
@@ -86,7 +91,7 @@ Your photos live with the Harness, not inside the plugin:
 
 ```
 ~/.dsh/storages/background-swapper/
-├── index.json      your names, the current photo, and the slider settings
+├── index.json      your names, the current photo, the slider settings, and your saved looks
 └── images/         one file per photo
 ```
 
@@ -125,7 +130,8 @@ profile's patch file instead, so a later reinstall cannot replace it:
 A new install starts on the **Wallpaper** preset — **Background opacity** 20%,
 **Element opacity** and **Sidebar opacity** 85% — with **Tint** *None* and
 **Blur** off. The **Reset** link beside each slider returns it to those values,
-which is the balance **Wallpaper** sets.
+which is the balance **Wallpaper** sets. Looks you save start empty and live in
+`index.json` with the rest of your settings.
 
 ## Common questions
 
@@ -145,11 +151,16 @@ opacity** the page everything sits on, **Element opacity** the panels over it,
 soften it. Both keep the effect; raising an opacity slider only hides more of the
 photo behind that layer.
 
-**What do the presets change?** Only the three opacity sliders. **Tint** and
-**Blur** stay exactly where you left them, so trying a preset never undoes a
-tuned photo. **Solid** keeps the photo selected but hides it behind a fully
-opaque interface; **Turn off** clears the photo instead. Both leave it in
-**Recent**, and one click brings it back.
+**What do the presets change?** Only the three opacity sliders — the shipped
+ones and anything you save. **Tint** and **Blur** stay exactly where you left
+them, so trying a preset never undoes a tuned photo. **Solid** keeps the photo
+selected but hides it behind a fully opaque interface; **Turn off** clears the
+photo instead. Both leave it in **Recent**, and one click brings it back.
+
+**I saved a look. Where did it go?** Into the preset row, beside **Wallpaper**,
+**Glass** and **Solid**, with a small × on its right to remove it. It is stored
+in `index.json` with the rest of your settings, so it is there in every browser
+and in the desktop app. Six is the most that are kept.
 
 **Why does the sidebar look darker than the rest?** Two see-through surfaces sit
 behind the sidebar and only one behind the main area, so at the same slider
@@ -197,7 +208,8 @@ Things to know before changing it:
   `color-mix()` of the same palette tones they already point to. The aliases are
   split into the ground the frame and body paint, the panels raised over it, and
   the sidebar column, and each slider fades one group. No application class name
-  is targeted, so renaming one breaks nothing.
+  is targeted, so renaming one breaks nothing. A saved look is exactly that
+  group of alphas plus a name, which is why loading one changes nothing else.
 - **Everything the plugin adds is React-rendered**, so unloading it restores the
   interface exactly. Nothing writes to `document.body` or appends a stylesheet
   by hand.
@@ -219,7 +231,8 @@ Both harnesses run in under a second and need no browser.
 server and drives the whole surface over real HTTP.
 [test/client.test.mjs](test/client.test.mjs) loads the browser bundle against a
 stub module loader and checks the registrations, the exact CSS the painter
-emits, and the preset row the panel renders.
+emits, and the panel's preset row: loading a shipped look, saving one of your
+own, and removing it.
 
 Edit `client.js` and refresh the page. Edit `index.js`, `store.js` or
 `cordis.patch.yml` and restart the Harness. [AGENTS.md](AGENTS.md) has the full

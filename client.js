@@ -69,6 +69,12 @@ window.__ModuleLoader__.load({
       presetSolid: 'Solid',
       presetTitle: (background, elements, sidebar) =>
         `Background ${background}%, Elements ${elements}%, Sidebar ${sidebar}%`,
+      presetSave: 'Save current',
+      presetSaveTitle: 'Save the three opacity sliders as a look of your own',
+      presetFullHint: max => `That is all ${max} saved looks. Remove one to save another.`,
+      presetNameLabel: 'Look name',
+      presetSuggest: 'My look',
+      presetDeleteNamed: name => `Delete ${name}`,
       backgroundOpacity: 'Background opacity',
       backgroundHint: 'Lower shows more photo in the open page.',
       elementOpacity: 'Element opacity',
@@ -128,29 +134,32 @@ window.__ModuleLoader__.load({
      * One-click balances of the three alphas, so the layers can be set without
      * hunting for the crossing point where the photo reads and the panels stay
      * legible. Tint and Blur are deliberately left alone: they belong to the
-     * photo, and a preset must not undo a photo someone already tuned.
+     * photo, and a preset must not undo a photo someone already tuned. Looks
+     * someone saves of their own live beside these and keep to the same
+     * contract, which is what makes loading one after trying Glass restore
+     * everything Glass could have changed.
      *
      * Wallpaper repeats the shipped defaults in `store.js`, which is why a
      * fresh library and a Reset both light it up.
      */
-    const PRESETS = [
+    const BUILT_IN_PRESETS = [
       {
         id: 'wallpaper',
-        label: STRINGS.presetWallpaper,
+        name: STRINGS.presetWallpaper,
         backgroundOpacity: 0.2,
         elementOpacity: 0.85,
         sidebarOpacity: 0.85,
       },
       {
         id: 'glass',
-        label: STRINGS.presetGlass,
+        name: STRINGS.presetGlass,
         backgroundOpacity: 0.05,
         elementOpacity: 0.5,
         sidebarOpacity: 0.5,
       },
       {
         id: 'solid',
-        label: STRINGS.presetSolid,
+        name: STRINGS.presetSolid,
         backgroundOpacity: 1,
         elementOpacity: 1,
         sidebarOpacity: 1,
@@ -161,7 +170,7 @@ window.__ModuleLoader__.load({
      * Whether the current alphas are exactly a preset's, so the row can say
      * which balance is on and go quiet as soon as one is adjusted by hand.
      * @param {object} state - Current snapshot.
-     * @param {typeof PRESETS[number]} preset - Preset to test.
+     * @param {typeof BUILT_IN_PRESETS[number]} preset - Preset to test.
      * @returns {boolean} True when every slider sits on the preset's value.
      */
     function isPresetActive(state, preset) {
@@ -172,7 +181,7 @@ window.__ModuleLoader__.load({
 
     /**
      * Apply a preset's alphas in one write, so the layers move together.
-     * @param {typeof PRESETS[number]} preset - Preset to apply.
+     * @param {typeof BUILT_IN_PRESETS[number]} preset - Preset to apply.
      */
     function applyPreset(preset) {
       const patch = {
@@ -185,6 +194,37 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * A label no saved look already uses, so a new one is never confused with
+     * one someone is looking for by name.
+     * @param {Array<{ name: string }>} presets - Saved looks.
+     * @returns {string} The suggested name.
+     */
+    function suggestedPresetName(presets) {
+      const taken = new Set(presets.map(preset => preset.name))
+      if (!taken.has(STRINGS.presetSuggest)) return STRINGS.presetSuggest
+      for (let index = 2; ; index += 1) {
+        const candidate = `${STRINGS.presetSuggest} ${index}`
+        if (!taken.has(candidate)) return candidate
+      }
+    }
+
+    /**
+     * An identifier no saved look already uses. It only has to be unique inside
+     * one library, so a timestamp and a little noise are enough and need no
+     * cryptographic source.
+     * @param {Array<{ id: string }>} presets - Saved looks.
+     * @returns {string} A fresh identifier.
+     */
+    function newPresetId(presets) {
+      const taken = new Set(presets.map(preset => preset.id))
+      let id
+      do {
+        id = `look-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+      } while (taken.has(id))
+      return id
+    }
+
+    /**
      * Placeholder settings and slider defaults used only until the host answers
      * with the real ones. The host owns both values: this pair exists so the
      * panel can paint something coherent during the first request, and it is
@@ -194,7 +234,10 @@ window.__ModuleLoader__.load({
       settings: Object.freeze({
         tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, sidebarOpacity: 0.5, blur: 0,
       }),
-      limits: Object.freeze({ pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 }),
+      limits: Object.freeze({
+        pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80,
+        maxPresets: 6, maxPresetNameLength: 24,
+      }),
     })
 
     // ── shared state ────────────────────────────────────────────────────────
@@ -204,6 +247,7 @@ window.__ModuleLoader__.load({
       status: 'loading',
       items: [],
       activeId: null,
+      presets: [],
       ...UNKNOWN.settings,
       defaults: UNKNOWN.settings,
       limits: UNKNOWN.limits,
@@ -280,6 +324,7 @@ window.__ModuleLoader__.load({
         status: 'ready',
         items: Array.isArray(payload.items) ? payload.items : [],
         activeId: typeof payload.activeId === 'string' ? payload.activeId : null,
+        presets: Array.isArray(payload.presets) ? payload.presets : [],
         tint: typeof payload.tint === 'number' ? payload.tint : UNKNOWN.settings.tint,
         backgroundOpacity: typeof payload.backgroundOpacity === 'number'
           ? payload.backgroundOpacity
@@ -567,6 +612,8 @@ window.__ModuleLoader__.load({
       const [renaming, setRenaming] = useState(null)
       const [confirming, setConfirming] = useState(null)
       const [dragging, setDragging] = useState(false)
+      // The naming step for a look being saved: null, or the half-typed name.
+      const [savingPreset, setSavingPreset] = useState(null)
 
       const rootRef = useRef(null)
       const triggerRef = useRef(null)
@@ -575,6 +622,7 @@ window.__ModuleLoader__.load({
       const draftNameRef = useRef(null)
       const renameRef = useRef(null)
       const previewRef = useRef(null)
+      const presetNameRef = useRef(null)
 
       // A draft's object URL must be released whether it is saved, cancelled, or
       // simply abandoned by closing the panel.
@@ -650,6 +698,14 @@ window.__ModuleLoader__.load({
         draftNameRef.current?.focus()
         draftNameRef.current?.select()
       }, [draft === null])
+
+      // The same for a look being saved, but only as it opens: re-selecting on
+      // every keystroke would fight the person typing.
+      useEffect(() => {
+        if (savingPreset === null) return
+        presetNameRef.current?.focus()
+        presetNameRef.current?.select()
+      }, [savingPreset === null])
 
       useEffect(() => { if (current !== page) setPage(current) }, [current, page])
 
@@ -748,13 +804,74 @@ window.__ModuleLoader__.load({
         })
       }, [])
 
+      const removePreset = useCallback(id => {
+        const next = state.presets.filter(preset => preset.id !== id)
+        publish({ presets: next })
+        persistSettings({ presets: next })
+      }, [state.presets])
+
+      const savePreset = useCallback(() => {
+        if (savingPreset === null) return
+        const name = savingPreset.name.trim()
+        if (name === '') return
+        // A saved look holds the three alphas and nothing else, so it can be
+        // dropped in after any other look without dragging the photo with it.
+        const preset = {
+          id: newPresetId(state.presets),
+          name,
+          backgroundOpacity: state.backgroundOpacity,
+          elementOpacity: state.elementOpacity,
+          sidebarOpacity: state.sidebarOpacity,
+        }
+        const next = [...state.presets, preset]
+        setSavingPreset(null)
+        publish({ presets: next })
+        persistSettings({ presets: next })
+      }, [savingPreset, state])
+
       const tintReadout = state.tint === 0
         ? STRINGS.tintNone
         : state.tint < 0
           ? STRINGS.tintDarken(Math.round(-state.tint * 100))
           : STRINGS.tintLighten(Math.round(state.tint * 100))
 
+      // Saving the same balance twice is the person's business; the hard limit
+      // is not, so only that withholds the control — and it says so in words
+      // rather than leaving a disabled button with nothing but a tooltip.
+      const presetsFull = state.presets.length >= (state.limits.maxPresets ?? Number.POSITIVE_INFINITY)
+
       const pageItems = state.items.slice((current - 1) * state.limits.pageSize, current * state.limits.pageSize)
+
+      /** One look in the preset row; a saved one carries its own remove control. */
+      const presetChip = (preset, removable) => {
+        const active = isPresetActive(state, preset)
+        return h('span', {
+          key: preset.id,
+          className: 'dsh-bgs-presetChip',
+          'data-active': active || undefined,
+        },
+        h('button', {
+          type: 'button',
+          className: 'dsh-bgs-preset',
+          'data-preset': preset.id,
+          'aria-pressed': active,
+          title: STRINGS.presetTitle(
+            Math.round(preset.backgroundOpacity * 100),
+            Math.round(preset.elementOpacity * 100),
+            Math.round(preset.sidebarOpacity * 100),
+          ),
+          onClick: () => { applyPreset(preset) },
+        }, preset.name),
+        removable === true
+          ? h('button', {
+            type: 'button',
+            className: 'dsh-bgs-presetDelete',
+            title: STRINGS.presetDeleteNamed(preset.name),
+            'aria-label': STRINGS.presetDeleteNamed(preset.name),
+            onClick: () => { removePreset(preset.id) },
+          }, h(Icon, { name: 'close', size: 11 }))
+          : null)
+      }
 
       const tile = item => {
         const isActive = item.id === state.activeId
@@ -945,24 +1062,53 @@ window.__ModuleLoader__.load({
           // because setting them apart is the whole point of the split.
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.appearance),
-            // Presets first, because the two alphas are easier to start from a
-            // known balance than to search for by dragging both sliders.
+            // Presets first, because the alphas are easier to start from a known
+            // balance — shipped, or one of the person's own — than to search for
+            // by dragging three sliders against each other.
             h('div', { className: 'dsh-bgs-presets', role: 'group', 'aria-label': STRINGS.presets },
               h('div', { className: 'dsh-bgs-presetRow' },
-                PRESETS.map(preset => h('button', {
-                  key: preset.id,
-                  type: 'button',
-                  className: 'dsh-bgs-preset',
-                  'data-preset': preset.id,
-                  'aria-pressed': isPresetActive(state, preset),
-                  title: STRINGS.presetTitle(
-                    Math.round(preset.backgroundOpacity * 100),
-                    Math.round(preset.elementOpacity * 100),
-                    Math.round(preset.sidebarOpacity * 100),
-                  ),
-                  onClick: () => { applyPreset(preset) },
-                }, preset.label))),
-              h('p', { className: 'dsh-bgs-hint' }, STRINGS.presetsHint)),
+                BUILT_IN_PRESETS.map(preset => presetChip(preset)),
+                state.presets.map(preset => presetChip(preset, true)),
+                savingPreset === null && !presetsFull
+                  ? h('button', {
+                    type: 'button',
+                    className: 'dsh-bgs-preset dsh-bgs-presetAdd',
+                    title: STRINGS.presetSaveTitle,
+                    onClick: () => { setSavingPreset({ name: suggestedPresetName(state.presets) }) },
+                  }, STRINGS.presetSave)
+                  : null),
+              savingPreset === null
+                ? null
+                : h('div', { className: 'dsh-bgs-presetForm' },
+                  h('input', {
+                    ref: presetNameRef,
+                    type: 'text',
+                    className: 'dsh-bgs-input',
+                    value: savingPreset.name,
+                    maxLength: state.limits.maxPresetNameLength,
+                    'aria-label': STRINGS.presetNameLabel,
+                    placeholder: STRINGS.presetSuggest,
+                    onChange: event => { setSavingPreset({ name: event.target.value }) },
+                    onKeyDown: event => {
+                      if (event.key === 'Enter') savePreset()
+                      if (event.key === 'Escape') { event.stopPropagation(); setSavingPreset(null) }
+                    },
+                  }),
+                  h('button', {
+                    type: 'button',
+                    className: 'dsh-bgs-primary',
+                    disabled: savingPreset.name.trim() === '',
+                    onClick: () => { savePreset() },
+                  }, STRINGS.save),
+                  h('button', {
+                    type: 'button',
+                    className: 'dsh-bgs-small',
+                    onClick: () => { setSavingPreset(null) },
+                  }, STRINGS.cancel)),
+              h('p', { className: 'dsh-bgs-hint' }, STRINGS.presetsHint),
+              presetsFull
+                ? h('p', { className: 'dsh-bgs-hint' }, STRINGS.presetFullHint(state.limits.maxPresets))
+                : null),
             h(RangeRow, {
               label: STRINGS.backgroundOpacity,
               hint: STRINGS.backgroundHint,
@@ -1148,12 +1294,21 @@ window.__ModuleLoader__.load({
 .dsh-bgs-field { display: flex; flex-direction: column; gap: 4px; }
 .dsh-bgs-fieldLabel { font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .dsh-bgs-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; }
-.dsh-bgs-input:focus-visible, .dsh-bgs-small:focus-visible, .dsh-bgs-primary:focus-visible, .dsh-bgs-iconSmall:focus-visible, .dsh-bgs-thumb:focus-visible, .dsh-bgs-trigger:focus-visible, .dsh-bgs-link:focus-visible, .dsh-bgs-slider:focus-visible, .dsh-bgs-preset:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-bgs-input:focus-visible, .dsh-bgs-small:focus-visible, .dsh-bgs-primary:focus-visible, .dsh-bgs-iconSmall:focus-visible, .dsh-bgs-thumb:focus-visible, .dsh-bgs-trigger:focus-visible, .dsh-bgs-link:focus-visible, .dsh-bgs-slider:focus-visible, .dsh-bgs-preset:focus-visible, .dsh-bgs-presetDelete:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
 .dsh-bgs-presets { margin-bottom: 12px; }
-.dsh-bgs-presetRow { display: flex; gap: 6px; }
-.dsh-bgs-preset { flex: 1 1 0; min-width: 0; padding: 5px 6px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.dsh-bgs-preset:hover { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); }
-.dsh-bgs-preset[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-bgs-presetRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.dsh-bgs-presetChip { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
+.dsh-bgs-presetChip[data-active] { border-color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-bgs-preset { min-width: 0; padding: 5px 8px; overflow: hidden; border: none; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.dsh-bgs-presetChip .dsh-bgs-preset { border-radius: 0; }
+.dsh-bgs-preset:hover:not(:disabled) { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); }
+.dsh-bgs-preset:disabled { opacity: .5; cursor: default; }
+.dsh-bgs-presetAdd { border: 1px dashed var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); }
+.dsh-bgs-presetAdd:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+.dsh-bgs-presetDelete { display: inline-flex; align-items: center; justify-content: center; width: 20px; padding: 0; align-self: stretch; border: none; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.dsh-bgs-presetDelete:hover { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent); color: var(--dsw-alias-state-error-primary); }
+.dsh-bgs-presetForm { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.dsh-bgs-presetForm .dsh-bgs-input { flex: 1 1 auto; min-width: 0; }
 .dsh-bgs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .dsh-bgs-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .dsh-bgs-thumb { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
