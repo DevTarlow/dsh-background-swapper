@@ -177,6 +177,24 @@ for (const bad of [
   assert.equal(refused.status, 400, `expected 400 for ${JSON.stringify(bad)}`)
 }
 
+// A field this half does not know is refused, not ignored. The two halves are
+// deployed together but loaded separately, so a browser half a version ahead
+// would otherwise have its write answered 200 and dropped — which is how a
+// saved look was once lost, with the panel showing it until the next reload.
+response = await call('/state', {
+  method: 'PATCH',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ opacity: 0.3 }),
+})
+assert.equal(response.status, 400)
+assert.match(await response.text(), /opacity is not a setting this library stores/)
+body = await (await call('/list')).json()
+assert.deepEqual(
+  [body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity],
+  [0.6, 0.8, 0.9],
+  'a refused body must not have moved anything',
+)
+
 response = await call('/state', {
   method: 'PATCH',
   headers: { 'content-type': 'application/json' },

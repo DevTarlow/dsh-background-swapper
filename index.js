@@ -11,7 +11,7 @@
  * - `GET    /images/<id>`     the stored bytes, immutably cacheable
  * - `PATCH  /images/<id>`     rename
  * - `DELETE /images/<id>`     delete
- * - `PATCH  /state`           active background, tint, the surface alphas, blur, saved looks
+ * - `PATCH  /state`           active background, tint, the surface alphas, blur, saved looks (unknown fields refused)
  *
  * The module imports `node:` builtins only: it must load on a released `dsh`,
  * where no workspace resolution or build step is available for an out-of-tree
@@ -47,6 +47,17 @@ export const IMAGES_ROUTE = `${ROUTE}/images`
 
 /** Settings write. */
 export const STATE_ROUTE = `${ROUTE}/state`
+
+/**
+ * Every field `PATCH /state` accepts. A body naming anything else is refused
+ * rather than ignored: the two halves of this plugin are deployed together but
+ * loaded separately, so a browser half a version ahead would otherwise have its
+ * write answered 200 and dropped, which reads to the person as a setting that
+ * saved and then vanished at the next reload.
+ */
+const STATE_FIELDS = new Set([
+  'activeId', 'tint', 'backgroundOpacity', 'elementOpacity', 'sidebarOpacity', 'blur', 'presets',
+])
 
 /** Largest JSON request body accepted, in bytes. */
 const MAX_JSON_BYTES = 16 * 1024
@@ -320,6 +331,10 @@ export async function apply(ctx, config) {
   const handleState = async (req, res) => {
     if (req.method !== 'PATCH') return methodNotAllowed(res, 'PATCH')
     const body = /** @type {Record<string, unknown>} */ (await readJson(req))
+    const unknown = Object.keys(body).find(field => !STATE_FIELDS.has(field))
+    if (unknown !== undefined) {
+      return writeText(res, 400, `${unknown} is not a setting this library stores`)
+    }
     /** @type {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, sidebarOpacity?: number, blur?: number }} */
     const patch = {}
     /** @type {import('./store.js').SavedPreset[] | undefined} */

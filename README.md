@@ -216,6 +216,10 @@ Things to know before changing it:
 - **Uploads are validated and ids are looked up in the index**, so a request can
   never name a path on disk. `maxImageBytes` is enforced on the Harness side and
   `maxDimension` in the browser.
+- **`PATCH /state` refuses a field it does not know** instead of ignoring it.
+  The two halves ship together but load separately — a browser half a version
+  ahead would otherwise have its write answered `200` and dropped, which the
+  panel shows as a setting that saved and then vanished at the next reload.
 - **The slider defaults live in one place**, `DEFAULT_SETTINGS` in
   [store.js](store.js), and are served with every `GET /list` so the panel's
   Reset links cannot drift away from them. The panel's **Wallpaper** preset
