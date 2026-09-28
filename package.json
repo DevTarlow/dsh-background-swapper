@@ -1,6 +1,6 @@
 {
   "name": "dsh-background-swapper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "DeepSeek Harness plugin: set a photo as the harness background, name and paginate a library of them, and tint, blur or fade the interface on top.",
