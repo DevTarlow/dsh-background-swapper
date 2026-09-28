@@ -230,6 +230,15 @@ const presetButtons = () => findAll(
 // read from the props the panel handed it rather than from a rendered input.
 const sliderProps = label => findAll(renderPanel(), node => node.props?.label === label)[0]?.props
 
+// The panel's own chrome must never take a foreground colour from a surface
+// token the painter fades. The primary Save button sits on a solid brand fill,
+// so a faded colour there leaves its label unreadable — worst at the low
+// background opacities the sliders exist to reach.
+const panelCss = findAll(renderPanel(), node => node.type === 'style')[0].children[0]
+assert.doesNotMatch(panelCss, / color: var\(--dsw-alias-bg-/, 'a slider-faded surface cannot colour panel text')
+assert.doesNotMatch(panelCss, / color: var\(--dsw-specific-sidebar-fill\)/, 'a slider-faded surface cannot colour panel text')
+assert.match(panelCss, / color: var\(--dsw-alias-label-primary-inverted\)/, 'the Save label needs a colour no slider can fade')
+
 let buttons = presetButtons()
 assert.deepEqual(buttons.map(button => button.children[0]), ['Wallpaper', 'Glass', 'Solid'])
 assert.match(buttons[1].props.title, /Background 5%, Elements 50%, Sidebar 50%/)

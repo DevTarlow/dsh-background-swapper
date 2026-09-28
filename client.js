@@ -1322,7 +1322,11 @@ window.__ModuleLoader__.load({
 .dsh-bgs-small, .dsh-bgs-primary { padding: 4px 9px; border-radius: 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .dsh-bgs-small { border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); }
 .dsh-bgs-small:hover:not(:disabled) { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); }
-.dsh-bgs-primary { border: 1px solid transparent; background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-bg-base); }
+// The fill is solid, so its label must be too: --dsw-alias-bg-base is one of
+// the tokens the painter fades, and using it here let the label fade with the
+// background slider until Save was unreadable. The inverted label token is the
+// theme's own pairing for text on a brand fill, and no slider touches it.
+.dsh-bgs-primary { border: 1px solid transparent; background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-label-primary-inverted); }
 .dsh-bgs-small:disabled, .dsh-bgs-primary:disabled, .dsh-bgs-iconSmall:disabled { opacity: .5; cursor: default; }
 .dsh-bgs-iconSmall { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .dsh-bgs-iconSmall:hover:not(:disabled) { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); color: var(--dsw-alias-label-primary); }
