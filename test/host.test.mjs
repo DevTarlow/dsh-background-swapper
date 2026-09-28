@@ -40,10 +40,10 @@ let response = await call('/list')
 assert.equal(response.status, 200)
 let body = await response.json()
 assert.deepEqual(body.items, [])
-assert.deepEqual([body.activeId, body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [null, 0, 0.5, 0.5, 0])
+assert.deepEqual([body.activeId, body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [null, 0, 0.2, 0.85, 0])
 // A fresh library starts from the shipped appearance defaults, and reports
 // them so the panel's Reset controls land there instead of on a literal.
-assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, blur: 0 })
+assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, blur: 0 })
 assert.deepEqual(body.limits, { pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80 })
 
 // ── upload ──────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ assert.equal(response.status, 200)
 body = await response.json()
 assert.deepEqual([body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [-0.4, 0.6, 0.8, 8])
 // Changing the current settings must not move what a Reset restores.
-assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, blur: 0 })
+assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, blur: 0 })
 
 for (const bad of [
   { tint: 4 }, { backgroundOpacity: -1 }, { elementOpacity: 2 }, { blur: 'x' }, { activeId: 'nope' },
@@ -195,7 +195,7 @@ await apply({ ...ctx, webServer: { register: registered => { route = registered;
 body = await (await call('/list')).json()
 assert.deepEqual(
   [body.tint, body.backgroundOpacity, body.elementOpacity, body.blur],
-  [-0.2, 0.5, 0.3, 4],
+  [-0.2, 0.2, 0.3, 4],
 )
 
 await new Promise(resolve => server.close(resolve))

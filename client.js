@@ -62,6 +62,12 @@ window.__ModuleLoader__.load({
       tintNone: 'None',
       tintDarken: percent => `Darken ${percent}%`,
       tintLighten: percent => `Lighten ${percent}%`,
+      presets: 'Presets',
+      presetsHint: 'Sets both opacity sliders. Tint and Blur are left alone.',
+      presetWallpaper: 'Wallpaper',
+      presetGlass: 'Glass',
+      presetSolid: 'Solid',
+      presetTitle: (background, elements) => `Background ${background}%, Elements ${elements}%`,
       backgroundOpacity: 'Background opacity',
       backgroundHint: 'Lower shows more photo in the open page.',
       elementOpacity: 'Element opacity',
@@ -105,6 +111,43 @@ window.__ModuleLoader__.load({
       ['--dsw-alias-bg-layer-3', '00', '800', 0],
       ['--dsw-alias-bg-overlay', '150', '700', OVERLAY_FLOOR],
     ]
+
+    /**
+     * One-click balances of the two alphas, so the pair can be set without
+     * hunting for the crossing point where the photo reads and the panels stay
+     * legible. Tint and Blur are deliberately left alone: they belong to the
+     * photo, and a preset must not undo a photo someone already tuned.
+     *
+     * Wallpaper repeats the shipped defaults in `store.js`, which is why a
+     * fresh library and a Reset both light it up.
+     */
+    const PRESETS = [
+      { id: 'wallpaper', label: STRINGS.presetWallpaper, backgroundOpacity: 0.2, elementOpacity: 0.85 },
+      { id: 'glass', label: STRINGS.presetGlass, backgroundOpacity: 0.05, elementOpacity: 0.5 },
+      { id: 'solid', label: STRINGS.presetSolid, backgroundOpacity: 1, elementOpacity: 1 },
+    ]
+
+    /**
+     * Whether the current alphas are exactly a preset's, so the row can say
+     * which balance is on and go quiet as soon as one is adjusted by hand.
+     * @param {object} state - Current snapshot.
+     * @param {typeof PRESETS[number]} preset - Preset to test.
+     * @returns {boolean} True when both sliders sit on the preset's values.
+     */
+    function isPresetActive(state, preset) {
+      return Math.round(state.backgroundOpacity * 100) === Math.round(preset.backgroundOpacity * 100)
+        && Math.round(state.elementOpacity * 100) === Math.round(preset.elementOpacity * 100)
+    }
+
+    /**
+     * Apply a preset's two alphas in one write, so the pair moves together.
+     * @param {typeof PRESETS[number]} preset - Preset to apply.
+     */
+    function applyPreset(preset) {
+      const patch = { backgroundOpacity: preset.backgroundOpacity, elementOpacity: preset.elementOpacity }
+      publish(patch)
+      persistSettings(patch)
+    }
 
     /**
      * Placeholder settings and slider defaults used only until the host answers
@@ -857,6 +900,23 @@ window.__ModuleLoader__.load({
           // of the split.
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.appearance),
+            // Presets first, because the two alphas are easier to start from a
+            // known balance than to search for by dragging both sliders.
+            h('div', { className: 'dsh-bgs-presets', role: 'group', 'aria-label': STRINGS.presets },
+              h('div', { className: 'dsh-bgs-presetRow' },
+                PRESETS.map(preset => h('button', {
+                  key: preset.id,
+                  type: 'button',
+                  className: 'dsh-bgs-preset',
+                  'data-preset': preset.id,
+                  'aria-pressed': isPresetActive(state, preset),
+                  title: STRINGS.presetTitle(
+                    Math.round(preset.backgroundOpacity * 100),
+                    Math.round(preset.elementOpacity * 100),
+                  ),
+                  onClick: () => { applyPreset(preset) },
+                }, preset.label))),
+              h('p', { className: 'dsh-bgs-hint' }, STRINGS.presetsHint)),
             h(RangeRow, {
               label: STRINGS.backgroundOpacity,
               hint: STRINGS.backgroundHint,
@@ -1026,7 +1086,12 @@ window.__ModuleLoader__.load({
 .dsh-bgs-field { display: flex; flex-direction: column; gap: 4px; }
 .dsh-bgs-fieldLabel { font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .dsh-bgs-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; }
-.dsh-bgs-input:focus-visible, .dsh-bgs-small:focus-visible, .dsh-bgs-primary:focus-visible, .dsh-bgs-iconSmall:focus-visible, .dsh-bgs-thumb:focus-visible, .dsh-bgs-trigger:focus-visible, .dsh-bgs-link:focus-visible, .dsh-bgs-slider:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-bgs-input:focus-visible, .dsh-bgs-small:focus-visible, .dsh-bgs-primary:focus-visible, .dsh-bgs-iconSmall:focus-visible, .dsh-bgs-thumb:focus-visible, .dsh-bgs-trigger:focus-visible, .dsh-bgs-link:focus-visible, .dsh-bgs-slider:focus-visible, .dsh-bgs-preset:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-bgs-presets { margin-bottom: 12px; }
+.dsh-bgs-presetRow { display: flex; gap: 6px; }
+.dsh-bgs-preset { flex: 1 1 0; min-width: 0; padding: 5px 6px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.dsh-bgs-preset:hover { background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent); }
+.dsh-bgs-preset[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
 .dsh-bgs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .dsh-bgs-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .dsh-bgs-thumb { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }

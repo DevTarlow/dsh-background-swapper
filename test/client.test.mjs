@@ -1,10 +1,14 @@
 /**
  * Structural verification of the browser half without a DOM or a React
  * renderer: load the module, run its factory with a minimal `react` stub, run
- * `apply` against a stub slot registry, and assert both registrations and the
- * one library read it starts. Temporary harness; not shipped.
+ * `apply` against a stub slot registry, and assert both registrations, the one
+ * library read it starts, and the exact CSS the painter emits. A second factory
+ * run with a stub that hands every hook an initial value then renders the open
+ * panel, so its sliders and preset row can be read and driven. Temporary
+ * harness; not shipped.
  */
 import assert from 'node:assert/strict'
+import { DEFAULT_SETTINGS } from '../store.js'
 
 let captured = null
 globalThis.window = { __ModuleLoader__: { load: registration => { captured = registration } } }
@@ -39,13 +43,20 @@ assert.deepEqual(plugin.inject, ['slots'])
 assert.equal(typeof plugin.apply, 'function')
 
 const reads = []
+/** The appearance half of a `GET /list`, taken from the shipped defaults. */
+const shipped = {
+  tint: DEFAULT_SETTINGS.tint,
+  backgroundOpacity: DEFAULT_SETTINGS.backgroundOpacity,
+  elementOpacity: DEFAULT_SETTINGS.elementOpacity,
+  blur: DEFAULT_SETTINGS.blur,
+}
 globalThis.fetch = async (url, options) => {
   reads.push({ url, options })
   return {
     ok: true,
     status: 200,
     json: async () => ({
-      ok: true, items: [], activeId: null, tint: 0, backgroundOpacity: 1, elementOpacity: 1, blur: 0, limits: {},
+      ok: true, items: [], activeId: null, ...shipped, defaults: { ...shipped }, limits: { pageSize: 6 },
     }),
     text: async () => '',
   }
@@ -145,5 +156,92 @@ hooks.state = () => stateWith(0.5, 0.5, { tint: -1 })
 assert.match(registered[0].component({}).children[0], /rgba\(0, 0, 0, 0\.850\)/)
 hooks.state = () => stateWith(0.5, 0.5, { tint: 1 })
 assert.match(registered[0].component({}).children[0], /rgba\(255, 255, 255, 0\.850\)/)
+
+// ── the panel ───────────────────────────────────────────────────────────────
+// The painter harness above never renders SwapBackground: it reads fabricated
+// snapshots. Run the factory a second time against a stub that hands every hook
+// its own initial value and reports the panel as open and already placed, so the
+// button tree can be walked and driven without a DOM. The hook order inside the
+// component is snapshot, open, anchor, which is what the counter targets.
+let hookCall = 0
+const PanelReact = {
+  createElement: (type, props, ...children) => ({ type, props, children }),
+  useState: initial => {
+    hookCall += 1
+    if (hookCall === 2) return [true, () => {}]
+    if (hookCall === 3) return [{ left: 8, bottom: 8, maxHeight: 640 }, () => {}]
+    return [typeof initial === 'function' ? initial() : initial, () => {}]
+  },
+  useEffect: () => {},
+  useMemo: factory => factory(),
+  useRef: () => ({ current: null }),
+  useCallback: fn => fn,
+}
+
+const panelPlugin = captured.factory(specifier => {
+  if (specifier === 'react') return PanelReact
+  throw new Error(`unexpected module request: ${specifier}`)
+})
+const panelRegistered = []
+panelPlugin.apply({
+  slots: {
+    inject: (key, callback) => { callback() },
+    register: (options, component) => { panelRegistered.push({ options, component }); return () => {} },
+  },
+})
+await new Promise(resolve => { setTimeout(resolve, 0) })
+
+/** Render the open panel against the live snapshot. */
+const renderPanel = () => { hookCall = 0; return panelRegistered[1].component({ wide: true }) }
+
+/** Every element in a rendered tree matching one predicate. */
+function findAll(node, predicate, found = []) {
+  if (Array.isArray(node)) {
+    for (const child of node) findAll(child, predicate, found)
+    return found
+  }
+  if (node === null || typeof node !== 'object') return found
+  if (predicate(node)) found.push(node)
+  for (const child of node.children ?? []) findAll(child, predicate, found)
+  return found
+}
+
+const presetButtons = () => findAll(
+  renderPanel(),
+  node => node.type === 'button' && node.props?.['data-preset'] !== undefined,
+)
+// A slider row is a component element the stub never expands, so its value is
+// read from the props the panel handed it rather than from a rendered input.
+const sliderProps = label => findAll(renderPanel(), node => node.props?.label === label)[0]?.props
+
+let buttons = presetButtons()
+assert.deepEqual(buttons.map(button => button.children[0]), ['Wallpaper', 'Glass', 'Solid'])
+assert.match(buttons[1].props.title, /Background 5%, Elements 50%/)
+// The panel's Wallpaper preset repeats the shipped defaults, so a fresh library
+// — and a Reset — opens with that balance already lit.
+assert.equal(buttons[0].props['aria-pressed'], true)
+assert.equal(buttons[1].props['aria-pressed'], false)
+assert.equal(sliderProps('Background opacity').value, Math.round(DEFAULT_SETTINGS.backgroundOpacity * 100))
+assert.equal(sliderProps('Element opacity').value, Math.round(DEFAULT_SETTINGS.elementOpacity * 100))
+
+// One click moves both alphas in one write and leaves the photo controls where
+// they were. The write is debounced, so run its timer at once rather than
+// waiting the delay out.
+const realSetTimeout = globalThis.setTimeout
+let flushPersist = null
+globalThis.setTimeout = (fn, _delay, ...args) => { flushPersist = () => { fn(...args) }; return 0 }
+buttons[1].props.onClick()
+globalThis.setTimeout = realSetTimeout
+flushPersist()
+await new Promise(resolve => { realSetTimeout(resolve, 0) })
+
+const written = reads.find(read => read.url === '/__background-swapper/state')
+assert.deepEqual(JSON.parse(written.options.body), { backgroundOpacity: 0.05, elementOpacity: 0.5 })
+buttons = presetButtons()
+assert.equal(buttons[1].props['aria-pressed'], true)
+assert.equal(sliderProps('Background opacity').value, 5)
+assert.equal(sliderProps('Element opacity').value, 50)
+assert.equal(sliderProps('Tint').value, Math.round(DEFAULT_SETTINGS.tint * 100))
+assert.equal(sliderProps('Blur').value, DEFAULT_SETTINGS.blur)
 
 console.log('client half: all assertions passed')

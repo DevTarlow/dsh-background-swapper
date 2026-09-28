@@ -44,12 +44,16 @@ export const IMAGE_TYPES = new Map([
  * because they fade different layers: `backgroundOpacity` the ground the frame
  * and body paint, `elementOpacity` the panels, cards and menus raised above it,
  * so the photo can fill the ground while the surfaces over it stay readable.
+ *
+ * The pair ships at the balance the split exists to make possible — the photo
+ * fills the page, the panels still read — and the panel's Wallpaper preset
+ * repeats these numbers, so a fresh library and a Reset both light it up.
  */
 export const DEFAULT_SETTINGS = Object.freeze({
   activeId: null,
   tint: 0,
-  backgroundOpacity: 0.5,
-  elementOpacity: 0.5,
+  backgroundOpacity: 0.2,
+  elementOpacity: 0.85,
   blur: 0,
 })
 

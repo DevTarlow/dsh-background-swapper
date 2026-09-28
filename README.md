@@ -11,8 +11,9 @@ Two different backgrounds. The space photo on the right has **Blur** turned up.
 
 **Swap Background** sits just above Settings in the left sidebar. Click it and a
 small panel opens where you add a photo, give it a name, and keep a set of
-favorites. Four sliders control how the photo looks and how much of it shows
-through the interface.
+favorites. Three presets set the balance between the interface and the photo in
+one click, and four sliders fine-tune how the photo looks and how much of it
+shows through.
 
 ## What you can do
 
@@ -22,11 +23,14 @@ through the interface.
   six to a page. Click one to switch to it.
 - **Rename or delete.** A pencil renames an entry, a bin deletes it, and
   **Remove all photos** empties the library.
+- **Presets.** **Wallpaper**, **Glass** and **Solid** set both opacity sliders
+  at once, and the one you are on stays lit. **Tint** and **Blur** are left
+  alone, so trying a preset never undoes a photo you tuned.
 - **Background opacity.** How solid the page behind everything is. Lower it and
-  the photo fills the open space; at 0% the photo is bare. It starts at 50%.
+  the photo fills the open space; at 0% the photo is bare. It starts at 20%.
 - **Element opacity.** How solid the sidebar, cards and menus over that page are.
   Raise it to keep text readable while the photo stays bright behind them. It
-  starts at 50%.
+  starts at 85%.
 - **Tint.** One slider from *Darken 100%* to *Lighten 100%*, for when text is
   hard to read over a bright photo.
 - **Blur.** Softens the photo, from 0 to 24 pixels.
@@ -64,8 +68,10 @@ you remove it.
    first, and the panel tells you when that happened.
 3. Type a name and press **Save**. The photo is stored and becomes your
    background straight away.
-4. Adjust the **Appearance** sliders above the library. They apply as you drag
-   and are saved a moment after you let go, so there is no Save button for them.
+4. Start from a preset in **Appearance** — **Wallpaper**, **Glass** or
+   **Solid** — then adjust the sliders above the library. Everything applies as
+   you drag and is saved a moment after you let go, so there is no Save button
+   for any of it.
 5. Click any thumbnail in **Recent** to switch photos. **Turn off** clears the
    current one without deleting it.
 
@@ -113,9 +119,10 @@ profile's patch file instead, so a later reinstall cannot replace it:
     maxImageBytes: 33554432
 ```
 
-A new install starts with **Background opacity** and **Element opacity** both at
-50%, **Tint** *None*, and **Blur** off. The **Reset** link beside each slider
-returns it to those values.
+A new install starts on the **Wallpaper** preset — **Background opacity** 20%,
+**Element opacity** 85% — with **Tint** *None* and **Blur** off. The **Reset**
+link beside each slider returns it to those values, which is the balance
+**Wallpaper** sets.
 
 ## Common questions
 
@@ -133,6 +140,12 @@ on it.
 **Text is hard to read over the photo.** Set **Tint** to darken it, or **Blur** to
 soften it. Both keep the effect; raising **Element opacity** only hides more of
 the photo behind the panels.
+
+**What do the presets change?** Only the two opacity sliders. **Tint** and
+**Blur** stay exactly where you left them, so trying a preset never undoes a
+tuned photo. **Solid** keeps the photo selected but hides it behind a fully
+opaque interface; **Turn off** clears the photo instead. Both leave it in
+**Recent**, and one click brings it back.
 
 **Why is the sidebar darker than the rest?** Two see-through surfaces sit behind
 the sidebar and only one behind the main area, so at the same slider setting the
@@ -188,7 +201,9 @@ Things to know before changing it:
   `maxDimension` in the browser.
 - **The slider defaults live in one place**, `DEFAULT_SETTINGS` in
   [store.js](store.js), and are served with every `GET /list` so the panel's
-  Reset links cannot drift away from them.
+  Reset links cannot drift away from them. The panel's **Wallpaper** preset
+  repeats those same numbers, so a fresh library and a Reset both light it up:
+  change one and the other belongs in the same commit.
 
 ```sh
 npm test
@@ -198,8 +213,8 @@ Both harnesses run in under a second and need no browser.
 [test/host.test.mjs](test/host.test.mjs) mounts the routes on a bare `node:http`
 server and drives the whole surface over real HTTP.
 [test/client.test.mjs](test/client.test.mjs) loads the browser bundle against a
-stub module loader and checks the registrations and the exact CSS the painter
-emits.
+stub module loader and checks the registrations, the exact CSS the painter
+emits, and the preset row the panel renders.
 
 Edit `client.js` and refresh the page. Edit `index.js`, `store.js` or
 `cordis.patch.yml` and restart the Harness. [AGENTS.md](AGENTS.md) has the full
