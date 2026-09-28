@@ -12,7 +12,7 @@ Two different backgrounds. The space photo on the right has **Blur** turned up.
 **Swap Background** sits just above Settings in the left sidebar. Click it and a
 small panel opens where you add a photo, give it a name, and keep a set of
 favorites. Three presets set the balance between the interface and the photo in
-one click, and four sliders fine-tune how the photo looks and how much of it
+one click, and five sliders fine-tune how the photo looks and how much of it
 shows through.
 
 ## What you can do
@@ -23,14 +23,17 @@ shows through.
   six to a page. Click one to switch to it.
 - **Rename or delete.** A pencil renames an entry, a bin deletes it, and
   **Remove all photos** empties the library.
-- **Presets.** **Wallpaper**, **Glass** and **Solid** set both opacity sliders
-  at once, and the one you are on stays lit. **Tint** and **Blur** are left
-  alone, so trying a preset never undoes a photo you tuned.
+- **Presets.** **Wallpaper**, **Glass** and **Solid** set all three opacity
+  sliders at once, and the one you are on stays lit. **Tint** and **Blur** are
+  left alone, so trying a preset never undoes a photo you tuned.
 - **Background opacity.** How solid the page behind everything is. Lower it and
   the photo fills the open space; at 0% the photo is bare. It starts at 20%.
-- **Element opacity.** How solid the sidebar, cards and menus over that page are.
+- **Element opacity.** How solid the cards, inputs and menus over that page are.
   Raise it to keep text readable while the photo stays bright behind them. It
   starts at 85%.
+- **Sidebar opacity.** How solid the left column is. It moves on its own, so the
+  navigation can stay readable while the panels go glassy, or the other way
+  round. It starts at 85%.
 - **Tint.** One slider from *Darken 100%* to *Lighten 100%*, for when text is
   hard to read over a bright photo.
 - **Blur.** Softens the photo, from 0 to 24 pixels.
@@ -120,36 +123,38 @@ profile's patch file instead, so a later reinstall cannot replace it:
 ```
 
 A new install starts on the **Wallpaper** preset — **Background opacity** 20%,
-**Element opacity** 85% — with **Tint** *None* and **Blur** off. The **Reset**
-link beside each slider returns it to those values, which is the balance
-**Wallpaper** sets.
+**Element opacity** and **Sidebar opacity** 85% — with **Tint** *None* and
+**Blur** off. The **Reset** link beside each slider returns it to those values,
+which is the balance **Wallpaper** sets.
 
 ## Common questions
 
 **The photo is too faint, or too strong.** Use **Background opacity**. Lower
 shows more photo in the open page, higher makes that page more solid. At 100% the
-photo only shows through the panels; with **Element opacity** at 100% as well
-nothing shows at all, and the panel says so.
+photo only shows through the panels and the sidebar; with **Element opacity** and
+**Sidebar opacity** at 100% as well nothing shows at all, and the panel says so.
 
-**The interface is too see-through to read.** Raise **Element opacity**. That
-solidifies the sidebar, cards and menus without taking the photo off the page, so
-you no longer have to choose between the two. The sliders fade different layers:
-**Background opacity** the page everything sits on, **Element opacity** what sits
-on it.
+**The interface is too see-through to read.** Raise **Element opacity**, or
+**Sidebar opacity** if it is the left column that is the problem. Either
+solidifies its own layer without taking the photo off the page, so you no longer
+have to choose between the two. The sliders fade different layers: **Background
+opacity** the page everything sits on, **Element opacity** the panels over it,
+**Sidebar opacity** the left column beside it.
 
 **Text is hard to read over the photo.** Set **Tint** to darken it, or **Blur** to
-soften it. Both keep the effect; raising **Element opacity** only hides more of
-the photo behind the panels.
+soften it. Both keep the effect; raising an opacity slider only hides more of the
+photo behind that layer.
 
-**What do the presets change?** Only the two opacity sliders. **Tint** and
+**What do the presets change?** Only the three opacity sliders. **Tint** and
 **Blur** stay exactly where you left them, so trying a preset never undoes a
 tuned photo. **Solid** keeps the photo selected but hides it behind a fully
 opaque interface; **Turn off** clears the photo instead. Both leave it in
 **Recent**, and one click brings it back.
 
-**Why is the sidebar darker than the rest?** Two see-through surfaces sit behind
-the sidebar and only one behind the main area, so at the same slider setting the
-sidebar always looks a little more solid.
+**Why does the sidebar look darker than the rest?** Two see-through surfaces sit
+behind the sidebar and only one behind the main area, so at the same slider
+setting it always reads a little more solid. Lower **Sidebar opacity** to even
+them up.
 
 **Does it work in another browser?** Yes. The library and the settings are stored
 with the Harness, so any browser pointed at it sees the same thing.
@@ -190,9 +195,9 @@ Things to know before changing it:
   everything, so the application's own elements are left alone.
 - **The see-through effect redefines the theme's background variables**, using
   `color-mix()` of the same palette tones they already point to. The aliases are
-  split into the ground the frame and body paint and the panels raised over it,
-  and each slider fades one group. No application class name is targeted, so
-  renaming one breaks nothing.
+  split into the ground the frame and body paint, the panels raised over it, and
+  the sidebar column, and each slider fades one group. No application class name
+  is targeted, so renaming one breaks nothing.
 - **Everything the plugin adds is React-rendered**, so unloading it restores the
   interface exactly. Nothing writes to `document.body` or appends a stylesheet
   by hand.

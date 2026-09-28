@@ -4,7 +4,7 @@
  * The library is one JSON index beside the image files it describes:
  *
  * ```text
- * <dir>/index.json          { version, items[], activeId, tint, backgroundOpacity, elementOpacity, blur }
+ * <dir>/index.json          { version, items[], activeId, tint, backgroundOpacity, elementOpacity, sidebarOpacity, blur }
  * <dir>/images/<id>.<ext>   one file per item, named by the item's opaque id
  * ```
  *
@@ -38,22 +38,24 @@ export const IMAGE_TYPES = new Map([
 /**
  * Settings defaults, also the values a fresh library reports.
  *
- * Both alphas start below 1 on purpose: at 1 a layer's surfaces are exactly as
- * opaque as the stock interface, so a newly added photo would be completely
+ * Every alpha starts below 1 on purpose: at 1 that layer's surfaces are exactly
+ * as opaque as the stock interface, so a newly added photo would be completely
  * hidden behind it and the plugin would look broken. They are kept apart
  * because they fade different layers: `backgroundOpacity` the ground the frame
- * and body paint, `elementOpacity` the panels, cards and menus raised above it,
- * so the photo can fill the ground while the surfaces over it stay readable.
+ * and body paint, `elementOpacity` the panels, cards and menus raised over it,
+ * and `sidebarOpacity` the left column, which is the one surface large enough,
+ * and prominent enough, to want tuning on its own.
  *
- * The pair ships at the balance the split exists to make possible — the photo
- * fills the page, the panels still read — and the panel's Wallpaper preset
- * repeats these numbers, so a fresh library and a Reset both light it up.
+ * They ship at the balance the split exists to make possible — the photo fills
+ * the page, the panels still read — and the panel's Wallpaper preset repeats
+ * these numbers, so a fresh library and a Reset both light it up.
  */
 export const DEFAULT_SETTINGS = Object.freeze({
   activeId: null,
   tint: 0,
   backgroundOpacity: 0.2,
   elementOpacity: 0.85,
+  sidebarOpacity: 0.85,
   blur: 0,
 })
 
@@ -64,6 +66,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
  * @property {number} tint - Darken-to-lighten wash over the photo, from -1 to 1.
  * @property {number} backgroundOpacity - Alpha of the ground behind the interface, from 0 to 1.
  * @property {number} elementOpacity - Alpha of the panels, cards and menus raised over that ground, from 0 to 1.
+ * @property {number} sidebarOpacity - Alpha of the left column in particular, from 0 to 1.
  * @property {number} blur - Photo blur radius in pixels, from 0 to 24.
  */
 
@@ -199,10 +202,15 @@ export async function createStore({ dir, warn }) {
         : null,
       tint: normalizeTint(parsed.tint) ?? DEFAULT_SETTINGS.tint,
       backgroundOpacity: normalizeOpacity(parsed.backgroundOpacity) ?? DEFAULT_SETTINGS.backgroundOpacity,
-      // An index written before the two sliders were split stored one alpha for
-      // every surface. It becomes the element alpha, which is the layer it
-      // mostly controlled; the ground takes the shipped default.
+      // An index written before the sliders were split stored one alpha for
+      // every surface; it becomes the element alpha, the layer it mostly
+      // controlled. The ground it never named takes the shipped default.
       elementOpacity: normalizeOpacity(parsed.elementOpacity ?? parsed.opacity) ?? DEFAULT_SETTINGS.elementOpacity,
+      // The sidebar used to be part of the element group, so an index from
+      // before it had a slider of its own inherits the element alpha, which
+      // keeps a stored look exactly as it was.
+      sidebarOpacity: normalizeOpacity(parsed.sidebarOpacity ?? parsed.elementOpacity ?? parsed.opacity)
+        ?? DEFAULT_SETTINGS.sidebarOpacity,
       blur: normalizeBlur(parsed.blur) ?? DEFAULT_SETTINGS.blur,
     }
     if (discarded > 0) warn(`discarded ${String(discarded)} index record(s) that had no usable image`)
@@ -355,7 +363,7 @@ export async function createStore({ dir, warn }) {
 
     /**
      * Apply a validated settings patch.
-     * @param {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, blur?: number }} patch - Fields to replace.
+     * @param {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, sidebarOpacity?: number, blur?: number }} patch - Fields to replace.
      * @returns {Promise<Settings>} The new settings.
      * @throws {Error} When `activeId` names an item that does not exist.
      */
@@ -369,6 +377,7 @@ export async function createStore({ dir, warn }) {
         if (patch.tint !== undefined) settings.tint = patch.tint
         if (patch.backgroundOpacity !== undefined) settings.backgroundOpacity = patch.backgroundOpacity
         if (patch.elementOpacity !== undefined) settings.elementOpacity = patch.elementOpacity
+        if (patch.sidebarOpacity !== undefined) settings.sidebarOpacity = patch.sidebarOpacity
         if (patch.blur !== undefined) settings.blur = patch.blur
         return { ...settings }
       })

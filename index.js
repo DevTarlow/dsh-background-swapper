@@ -11,7 +11,7 @@
  * - `GET    /images/<id>`     the stored bytes, immutably cacheable
  * - `PATCH  /images/<id>`     rename
  * - `DELETE /images/<id>`     delete
- * - `PATCH  /state`           active background, tint, both surface alphas, blur
+ * - `PATCH  /state`           active background, tint, the surface alphas, blur
  *
  * The module imports `node:` builtins only: it must load on a released `dsh`,
  * where no workspace resolution or build step is available for an out-of-tree
@@ -286,6 +286,7 @@ export async function apply(ctx, config) {
       tint: DEFAULT_SETTINGS.tint,
       backgroundOpacity: DEFAULT_SETTINGS.backgroundOpacity,
       elementOpacity: DEFAULT_SETTINGS.elementOpacity,
+      sidebarOpacity: DEFAULT_SETTINGS.sidebarOpacity,
       blur: DEFAULT_SETTINGS.blur,
     },
     limits: {
@@ -315,7 +316,7 @@ export async function apply(ctx, config) {
   const handleState = async (req, res) => {
     if (req.method !== 'PATCH') return methodNotAllowed(res, 'PATCH')
     const body = /** @type {Record<string, unknown>} */ (await readJson(req))
-    /** @type {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, blur?: number }} */
+    /** @type {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, sidebarOpacity?: number, blur?: number }} */
     const patch = {}
     if ('activeId' in body) {
       const activeId = body.activeId
@@ -341,6 +342,11 @@ export async function apply(ctx, config) {
       const elementOpacity = normalizeOpacity(body.elementOpacity)
       if (elementOpacity === undefined) return writeText(res, 400, 'elementOpacity must be a number from 0 to 1')
       patch.elementOpacity = elementOpacity
+    }
+    if ('sidebarOpacity' in body) {
+      const sidebarOpacity = normalizeOpacity(body.sidebarOpacity)
+      if (sidebarOpacity === undefined) return writeText(res, 400, 'sidebarOpacity must be a number from 0 to 1')
+      patch.sidebarOpacity = sidebarOpacity
     }
     if ('blur' in body) {
       const blur = normalizeBlur(body.blur)

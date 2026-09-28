@@ -63,15 +63,18 @@ window.__ModuleLoader__.load({
       tintDarken: percent => `Darken ${percent}%`,
       tintLighten: percent => `Lighten ${percent}%`,
       presets: 'Presets',
-      presetsHint: 'Sets both opacity sliders. Tint and Blur are left alone.',
+      presetsHint: 'Sets the three opacity sliders. Tint and Blur are left alone.',
       presetWallpaper: 'Wallpaper',
       presetGlass: 'Glass',
       presetSolid: 'Solid',
-      presetTitle: (background, elements) => `Background ${background}%, Elements ${elements}%`,
+      presetTitle: (background, elements, sidebar) =>
+        `Background ${background}%, Elements ${elements}%, Sidebar ${sidebar}%`,
       backgroundOpacity: 'Background opacity',
       backgroundHint: 'Lower shows more photo in the open page.',
       elementOpacity: 'Element opacity',
-      elementHint: 'Higher keeps the sidebar and cards readable.',
+      elementHint: 'Higher keeps the cards and menus readable.',
+      sidebarOpacity: 'Sidebar opacity',
+      sidebarHint: 'How solid the left column is, on its own.',
       solidHint: 'Everything is fully opaque, so the photo is hidden. Lower Background opacity to see it.',
       blur: 'Blur',
       reset: 'Reset',
@@ -100,12 +103,11 @@ window.__ModuleLoader__.load({
 
     /**
      * The surfaces raised over that ground, faded by the Element opacity
-     * slider: the sidebar, cards, inputs, code blocks and menus. Each carries
-     * the static palette tone it maps to and the smallest alpha it may take, so
-     * a dialog or menu cannot be faded into unreadability.
+     * slider: cards, inputs, code blocks and menus. Each carries the static
+     * palette tone it maps to and the smallest alpha it may take, so a dialog
+     * or menu cannot be faded into unreadability.
      */
     const ELEMENT_TOKENS = [
-      ['--dsw-specific-sidebar-fill', '50', '900', 0],
       ['--dsw-alias-bg-layer-1', '00', '875', 0],
       ['--dsw-alias-bg-layer-2', '00', '850', 0],
       ['--dsw-alias-bg-layer-3', '00', '800', 0],
@@ -113,7 +115,17 @@ window.__ModuleLoader__.load({
     ]
 
     /**
-     * One-click balances of the two alphas, so the pair can be set without
+     * The left column, faded by the Sidebar opacity slider. It is one token
+     * rather than a group, but it is the largest piece of chrome and the one
+     * people most often want solid while the panels stay glassy, so it gets its
+     * own alpha instead of riding the element one.
+     */
+    const SIDEBAR_TOKENS = [
+      ['--dsw-specific-sidebar-fill', '50', '900', 0],
+    ]
+
+    /**
+     * One-click balances of the three alphas, so the layers can be set without
      * hunting for the crossing point where the photo reads and the panels stay
      * legible. Tint and Blur are deliberately left alone: they belong to the
      * photo, and a preset must not undo a photo someone already tuned.
@@ -122,9 +134,27 @@ window.__ModuleLoader__.load({
      * fresh library and a Reset both light it up.
      */
     const PRESETS = [
-      { id: 'wallpaper', label: STRINGS.presetWallpaper, backgroundOpacity: 0.2, elementOpacity: 0.85 },
-      { id: 'glass', label: STRINGS.presetGlass, backgroundOpacity: 0.05, elementOpacity: 0.5 },
-      { id: 'solid', label: STRINGS.presetSolid, backgroundOpacity: 1, elementOpacity: 1 },
+      {
+        id: 'wallpaper',
+        label: STRINGS.presetWallpaper,
+        backgroundOpacity: 0.2,
+        elementOpacity: 0.85,
+        sidebarOpacity: 0.85,
+      },
+      {
+        id: 'glass',
+        label: STRINGS.presetGlass,
+        backgroundOpacity: 0.05,
+        elementOpacity: 0.5,
+        sidebarOpacity: 0.5,
+      },
+      {
+        id: 'solid',
+        label: STRINGS.presetSolid,
+        backgroundOpacity: 1,
+        elementOpacity: 1,
+        sidebarOpacity: 1,
+      },
     ]
 
     /**
@@ -132,19 +162,24 @@ window.__ModuleLoader__.load({
      * which balance is on and go quiet as soon as one is adjusted by hand.
      * @param {object} state - Current snapshot.
      * @param {typeof PRESETS[number]} preset - Preset to test.
-     * @returns {boolean} True when both sliders sit on the preset's values.
+     * @returns {boolean} True when every slider sits on the preset's value.
      */
     function isPresetActive(state, preset) {
-      return Math.round(state.backgroundOpacity * 100) === Math.round(preset.backgroundOpacity * 100)
-        && Math.round(state.elementOpacity * 100) === Math.round(preset.elementOpacity * 100)
+      return alphaPercent(state.backgroundOpacity) === alphaPercent(preset.backgroundOpacity)
+        && alphaPercent(state.elementOpacity) === alphaPercent(preset.elementOpacity)
+        && alphaPercent(state.sidebarOpacity) === alphaPercent(preset.sidebarOpacity)
     }
 
     /**
-     * Apply a preset's two alphas in one write, so the pair moves together.
+     * Apply a preset's alphas in one write, so the layers move together.
      * @param {typeof PRESETS[number]} preset - Preset to apply.
      */
     function applyPreset(preset) {
-      const patch = { backgroundOpacity: preset.backgroundOpacity, elementOpacity: preset.elementOpacity }
+      const patch = {
+        backgroundOpacity: preset.backgroundOpacity,
+        elementOpacity: preset.elementOpacity,
+        sidebarOpacity: preset.sidebarOpacity,
+      }
       publish(patch)
       persistSettings(patch)
     }
@@ -156,7 +191,9 @@ window.__ModuleLoader__.load({
      * overwritten by the first `GET /list` that resolves.
      */
     const UNKNOWN = Object.freeze({
-      settings: Object.freeze({ tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, blur: 0 }),
+      settings: Object.freeze({
+        tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, sidebarOpacity: 0.5, blur: 0,
+      }),
       limits: Object.freeze({ pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 }),
     })
 
@@ -207,7 +244,8 @@ window.__ModuleLoader__.load({
     function isSettings(value) {
       return typeof value === 'object' && value !== null
         && typeof value.tint === 'number' && typeof value.backgroundOpacity === 'number'
-        && typeof value.elementOpacity === 'number' && typeof value.blur === 'number'
+        && typeof value.elementOpacity === 'number' && typeof value.sidebarOpacity === 'number'
+        && typeof value.blur === 'number'
     }
 
     // ── host transport ──────────────────────────────────────────────────────
@@ -249,6 +287,9 @@ window.__ModuleLoader__.load({
         elementOpacity: typeof payload.elementOpacity === 'number'
           ? payload.elementOpacity
           : UNKNOWN.settings.elementOpacity,
+        sidebarOpacity: typeof payload.sidebarOpacity === 'number'
+          ? payload.sidebarOpacity
+          : UNKNOWN.settings.sidebarOpacity,
         blur: typeof payload.blur === 'number' ? payload.blur : UNKNOWN.settings.blur,
         defaults: isSettings(payload.defaults) ? payload.defaults : snapshot.defaults,
         limits: payload.limits === undefined ? snapshot.limits : { ...snapshot.limits, ...payload.limits },
@@ -336,6 +377,7 @@ window.__ModuleLoader__.load({
       if (item === undefined) return null
       const ground = surfaceRules(alphaPercent(state.backgroundOpacity), BACKGROUND_TOKENS)
       const elements = surfaceRules(alphaPercent(state.elementOpacity), ELEMENT_TOKENS)
+      const sidebar = surfaceRules(alphaPercent(state.sidebarOpacity), SIDEBAR_TOKENS)
       const blur = Math.max(0, Math.min(24, state.blur))
       const tint = state.tint < 0
         ? `rgba(0, 0, 0, ${(-state.tint * 0.85).toFixed(3)})`
@@ -357,8 +399,8 @@ window.__ModuleLoader__.load({
         '  background-repeat: no-repeat, no-repeat;',
         `  filter: blur(${blur}px);`,
         '}',
-        `body { ${[...ground.light, ...elements.light].join(' ')} }`,
-        `body[data-ds-dark-theme] { ${[...ground.dark, ...elements.dark].join(' ')} }`,
+        `body { ${[...ground.light, ...sidebar.light, ...elements.light].join(' ')} }`,
+        `body[data-ds-dark-theme] { ${[...ground.dark, ...sidebar.dark, ...elements.dark].join(' ')} }`,
       ].join('\n')
     }
 
@@ -367,7 +409,10 @@ window.__ModuleLoader__.load({
       const state = useSnapshot()
       const css = useMemo(
         () => paintCss(state),
-        [state.activeId, state.backgroundOpacity, state.elementOpacity, state.blur, state.tint, state.items],
+        [
+          state.activeId, state.backgroundOpacity, state.elementOpacity, state.sidebarOpacity,
+          state.blur, state.tint, state.items,
+        ],
       )
       if (css === null) return null
       return h('style', { 'data-background-swapper': '' }, css)
@@ -826,6 +871,7 @@ window.__ModuleLoader__.load({
                     onClick: () => { pick(null) },
                   }, STRINGS.turnOff)),
                 state.backgroundOpacity >= 0.99 && state.elementOpacity >= 0.99
+                  && state.sidebarOpacity >= 0.99
                   ? h('p', { className: 'dsh-bgs-note' }, STRINGS.solidHint)
                   : null)),
 
@@ -894,10 +940,9 @@ window.__ModuleLoader__.load({
 
           // Appearance sits above the library on purpose: the sliders are the
           // controls a photo is tuned with, and a long grid below them would
-          // push them off the fold. The two alphas lead as a pair, ground first,
-          // because they are the two halves of one decision — how much photo,
-          // how solid the interface — and reading them apart is the whole point
-          // of the split.
+          // push them off the fold. The alphas run back to front — the ground,
+          // the panels over it, then the sidebar that stands beside both —
+          // because setting them apart is the whole point of the split.
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.appearance),
             // Presets first, because the two alphas are easier to start from a
@@ -913,6 +958,7 @@ window.__ModuleLoader__.load({
                   title: STRINGS.presetTitle(
                     Math.round(preset.backgroundOpacity * 100),
                     Math.round(preset.elementOpacity * 100),
+                    Math.round(preset.sidebarOpacity * 100),
                   ),
                   onClick: () => { applyPreset(preset) },
                 }, preset.label))),
@@ -947,6 +993,22 @@ window.__ModuleLoader__.load({
               onChange: next => {
                 publish({ elementOpacity: next / 100 })
                 persistSettings({ elementOpacity: next / 100 })
+              },
+            }),
+            h(RangeRow, {
+              label: STRINGS.sidebarOpacity,
+              hint: STRINGS.sidebarHint,
+              min: 0,
+              max: 100,
+              value: Math.round(state.sidebarOpacity * 100),
+              readout: `${Math.round(state.sidebarOpacity * 100)}%`,
+              onReset: state.sidebarOpacity === state.defaults.sidebarOpacity ? undefined : () => {
+                publish({ sidebarOpacity: state.defaults.sidebarOpacity })
+                persistSettings({ sidebarOpacity: state.defaults.sidebarOpacity })
+              },
+              onChange: next => {
+                publish({ sidebarOpacity: next / 100 })
+                persistSettings({ sidebarOpacity: next / 100 })
               },
             }),
             h(RangeRow, {

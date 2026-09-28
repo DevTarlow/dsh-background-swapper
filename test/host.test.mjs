@@ -40,10 +40,13 @@ let response = await call('/list')
 assert.equal(response.status, 200)
 let body = await response.json()
 assert.deepEqual(body.items, [])
-assert.deepEqual([body.activeId, body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [null, 0, 0.2, 0.85, 0])
+assert.deepEqual(
+  [body.activeId, body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
+  [null, 0, 0.2, 0.85, 0.85, 0],
+)
 // A fresh library starts from the shipped appearance defaults, and reports
 // them so the panel's Reset controls land there instead of on a literal.
-assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, blur: 0 })
+assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, sidebarOpacity: 0.85, blur: 0 })
 assert.deepEqual(body.limits, { pageSize: 6, maxImageBytes: 65536, maxDimension: 2560, maxNameLength: 80 })
 
 // ── upload ──────────────────────────────────────────────────────────────────
@@ -92,16 +95,20 @@ assert.equal(response.status, 400)
 response = await call('/state', {
   method: 'PATCH',
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ tint: -0.4, backgroundOpacity: 0.6, elementOpacity: 0.8, blur: 8 }),
+  body: JSON.stringify({ tint: -0.4, backgroundOpacity: 0.6, elementOpacity: 0.8, sidebarOpacity: 0.9, blur: 8 }),
 })
 assert.equal(response.status, 200)
 body = await response.json()
-assert.deepEqual([body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [-0.4, 0.6, 0.8, 8])
+assert.deepEqual(
+  [body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
+  [-0.4, 0.6, 0.8, 0.9, 8],
+)
 // Changing the current settings must not move what a Reset restores.
-assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, blur: 0 })
+assert.deepEqual(body.defaults, { tint: 0, backgroundOpacity: 0.2, elementOpacity: 0.85, sidebarOpacity: 0.85, blur: 0 })
 
 for (const bad of [
-  { tint: 4 }, { backgroundOpacity: -1 }, { elementOpacity: 2 }, { blur: 'x' }, { activeId: 'nope' },
+  { tint: 4 }, { backgroundOpacity: -1 }, { elementOpacity: 2 }, { sidebarOpacity: 'x' },
+  { blur: 'x' }, { activeId: 'nope' },
 ]) {
   const refused = await call('/state', {
     method: 'PATCH',
@@ -145,7 +152,10 @@ response = await call('/list')
 body = await response.json()
 assert.equal(body.items.length, 1)
 assert.equal(body.items[0].name, 'Renamed')
-assert.deepEqual([body.tint, body.backgroundOpacity, body.elementOpacity, body.blur], [-0.4, 0.6, 0.8, 8])
+assert.deepEqual(
+  [body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
+  [-0.4, 0.6, 0.8, 0.9, 8],
+)
 
 // ── delete one, then clear the rest ─────────────────────────────────────────
 response = await call(`/images/${id}`, { method: 'DELETE' })
@@ -179,27 +189,39 @@ const indexFile = JSON.parse(await readFile(join(dir, 'index.json'), 'utf8'))
 assert.equal(indexFile.version, 1)
 assert.deepEqual(indexFile.items, [])
 assert.deepEqual(
-  [indexFile.tint, indexFile.backgroundOpacity, indexFile.elementOpacity, indexFile.blur],
-  [-0.4, 0.6, 0.8, 8],
+  [indexFile.tint, indexFile.backgroundOpacity, indexFile.elementOpacity, indexFile.sidebarOpacity, indexFile.blur],
+  [-0.4, 0.6, 0.8, 0.9, 8],
 )
 
-// ── an index written before the sliders were split ──────────────────────────
-// `opacity` was the single alpha every surface shared. Reading it back as the
-// element alpha keeps a stored look instead of silently resetting the library;
-// the ground it never had a value for takes the shipped default.
-const legacyDir = await mkdtemp(join(tmpdir(), 'bgs-legacy-'))
-await writeFile(join(legacyDir, 'index.json'), `${JSON.stringify({
+// ── indexes written before every slider had its own field ───────────────────
+// `opacity` was the single alpha every surface shared, and the sidebar later
+// rode the element alpha. Both shapes have to read back the sidebar's own value
+// instead of resetting the library: the newest field inherits whichever alpha
+// governed the sidebar before it existed, and a field the index never named
+// takes the shipped default.
+const inheritedDir = await mkdtemp(join(tmpdir(), 'bgs-inherited-'))
+await writeFile(join(inheritedDir, 'index.json'), `${JSON.stringify({
   version: 1, items: [], activeId: null, tint: -0.2, opacity: 0.3, blur: 4,
 })}\n`, 'utf8')
-await apply({ ...ctx, webServer: { register: registered => { route = registered; return () => {} } } }, { dataDir: legacyDir })
+await apply({ ...ctx, webServer: { register: registered => { route = registered; return () => {} } } }, { dataDir: inheritedDir })
 body = await (await call('/list')).json()
 assert.deepEqual(
-  [body.tint, body.backgroundOpacity, body.elementOpacity, body.blur],
-  [-0.2, 0.2, 0.3, 4],
+  [body.tint, body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity, body.blur],
+  [-0.2, 0.2, 0.3, 0.3, 4],
 )
+
+// The shape the previous release wrote: the two sliders it had, no sidebar.
+const splitDir = await mkdtemp(join(tmpdir(), 'bgs-split-'))
+await writeFile(join(splitDir, 'index.json'), `${JSON.stringify({
+  version: 1, items: [], activeId: null, tint: 0, backgroundOpacity: 0.6, elementOpacity: 0.3, blur: 0,
+})}\n`, 'utf8')
+await apply({ ...ctx, webServer: { register: registered => { route = registered; return () => {} } } }, { dataDir: splitDir })
+body = await (await call('/list')).json()
+assert.deepEqual([body.backgroundOpacity, body.elementOpacity, body.sidebarOpacity], [0.6, 0.3, 0.3])
 
 await new Promise(resolve => server.close(resolve))
 await rm(dir, { recursive: true, force: true })
-await rm(legacyDir, { recursive: true, force: true })
+await rm(inheritedDir, { recursive: true, force: true })
+await rm(splitDir, { recursive: true, force: true })
 assert.deepEqual(warnings, [])
 console.log('host half: all assertions passed')

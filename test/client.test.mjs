@@ -19,7 +19,7 @@ assert.equal(typeof captured.factory, 'function')
 
 const hooks = {
   state: () => [{
-    items: [], activeId: null, backgroundOpacity: 1, elementOpacity: 1, blur: 0, tint: 0,
+    items: [], activeId: null, backgroundOpacity: 1, elementOpacity: 1, sidebarOpacity: 1, blur: 0, tint: 0,
     limits: {}, error: null, status: 'ready',
   }, () => {}],
 }
@@ -48,6 +48,7 @@ const shipped = {
   tint: DEFAULT_SETTINGS.tint,
   backgroundOpacity: DEFAULT_SETTINGS.backgroundOpacity,
   elementOpacity: DEFAULT_SETTINGS.elementOpacity,
+  sidebarOpacity: DEFAULT_SETTINGS.sidebarOpacity,
   blur: DEFAULT_SETTINGS.blur,
 }
 globalThis.fetch = async (url, options) => {
@@ -106,7 +107,8 @@ assert.equal(painterValue, null, 'no active background must paint no style eleme
 // One snapshot with an active background, so each painted assertion reads a
 // whole set of slider values.
 const stateWith = (backgroundOpacity, elementOpacity, extra) => [{
-  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', backgroundOpacity, elementOpacity, blur: 0, tint: 0,
+  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', backgroundOpacity, elementOpacity,
+  sidebarOpacity: elementOpacity, blur: 0, tint: 0,
   limits: {}, error: null, status: 'ready', ...extra,
 }, () => {}]
 
@@ -124,21 +126,23 @@ assert.match(css, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static
 assert.match(css, /body\[data-ds-dark-theme\] \{ --dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-950\) 50%, transparent\);/)
 assert.match(css, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-900\) 50%, transparent\);/)
 
-// The two sliders fade different layers, which is the whole point: the
-// background alpha moves the ground alone, the element alpha the panels, cards
-// and menus raised over it, so a bare ground can sit under solid panels.
-hooks.state = () => stateWith(0.25, 0.75)
+// Every slider fades its own layer, which is the whole point: the background
+// alpha moves the ground alone, the element alpha the cards and menus raised
+// over it, and the sidebar alpha the left column, so a bare ground can sit
+// under mixed panels.
+hooks.state = () => stateWith(0.25, 0.75, { sidebarOpacity: 0.4 })
 const split = registered[0].component({}).children[0]
 assert.match(split, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 25%, transparent\);/)
-assert.match(split, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-50\) 75%, transparent\);/)
+assert.match(split, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-50\) 40%, transparent\);/)
+assert.match(split, /--dsw-alias-bg-layer-1: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 75%, transparent\);/)
 assert.match(split, /--dsw-alias-bg-layer-3: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-800\) 75%, transparent\);/)
 // A menu or dialog keeps its own floor; the floor is per token, not a cap on
 // the group, so raising element opacity past it still raises the overlay.
 assert.match(split, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
 
-// The ends of both sliders: 100% restores the stock opaque surfaces (which is
+// The ends of every slider: 100% restores the stock opaque surfaces (which is
 // why a fresh library must not start there), and 0% leaves the photo bare in
-// that layer while the other layer is untouched.
+// that layer while the others are untouched.
 hooks.state = () => stateWith(1, 1)
 const opaque = registered[0].component({}).children[0]
 assert.match(opaque, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 100%, transparent\);/)
@@ -216,15 +220,16 @@ const sliderProps = label => findAll(renderPanel(), node => node.props?.label ==
 
 let buttons = presetButtons()
 assert.deepEqual(buttons.map(button => button.children[0]), ['Wallpaper', 'Glass', 'Solid'])
-assert.match(buttons[1].props.title, /Background 5%, Elements 50%/)
+assert.match(buttons[1].props.title, /Background 5%, Elements 50%, Sidebar 50%/)
 // The panel's Wallpaper preset repeats the shipped defaults, so a fresh library
 // — and a Reset — opens with that balance already lit.
 assert.equal(buttons[0].props['aria-pressed'], true)
 assert.equal(buttons[1].props['aria-pressed'], false)
 assert.equal(sliderProps('Background opacity').value, Math.round(DEFAULT_SETTINGS.backgroundOpacity * 100))
 assert.equal(sliderProps('Element opacity').value, Math.round(DEFAULT_SETTINGS.elementOpacity * 100))
+assert.equal(sliderProps('Sidebar opacity').value, Math.round(DEFAULT_SETTINGS.sidebarOpacity * 100))
 
-// One click moves both alphas in one write and leaves the photo controls where
+// One click moves every alpha in one write and leaves the photo controls where
 // they were. The write is debounced, so run its timer at once rather than
 // waiting the delay out.
 const realSetTimeout = globalThis.setTimeout
@@ -236,11 +241,15 @@ flushPersist()
 await new Promise(resolve => { realSetTimeout(resolve, 0) })
 
 const written = reads.find(read => read.url === '/__background-swapper/state')
-assert.deepEqual(JSON.parse(written.options.body), { backgroundOpacity: 0.05, elementOpacity: 0.5 })
+assert.deepEqual(
+  JSON.parse(written.options.body),
+  { backgroundOpacity: 0.05, elementOpacity: 0.5, sidebarOpacity: 0.5 },
+)
 buttons = presetButtons()
 assert.equal(buttons[1].props['aria-pressed'], true)
 assert.equal(sliderProps('Background opacity').value, 5)
 assert.equal(sliderProps('Element opacity').value, 50)
+assert.equal(sliderProps('Sidebar opacity').value, 50)
 assert.equal(sliderProps('Tint').value, Math.round(DEFAULT_SETTINGS.tint * 100))
 assert.equal(sliderProps('Blur').value, DEFAULT_SETTINGS.blur)
 
