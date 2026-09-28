@@ -4,7 +4,7 @@
  * The library is one JSON index beside the image files it describes:
  *
  * ```text
- * <dir>/index.json          { version, items[], activeId, tint, opacity, blur }
+ * <dir>/index.json          { version, items[], activeId, tint, backgroundOpacity, elementOpacity, blur }
  * <dir>/images/<id>.<ext>   one file per item, named by the item's opaque id
  * ```
  *
@@ -38,11 +38,30 @@ export const IMAGE_TYPES = new Map([
 /**
  * Settings defaults, also the values a fresh library reports.
  *
- * `opacity` starts below 1 on purpose: at 1 the surfaces are exactly as opaque
- * as the stock interface, so a newly added photo would be completely hidden and
- * the plugin would look broken.
+ * Both alphas start below 1 on purpose: at 1 a layer's surfaces are exactly as
+ * opaque as the stock interface, so a newly added photo would be completely
+ * hidden behind it and the plugin would look broken. They are kept apart
+ * because they fade different layers: `backgroundOpacity` the ground the frame
+ * and body paint, `elementOpacity` the panels, cards and menus raised above it,
+ * so the photo can fill the ground while the surfaces over it stay readable.
  */
-export const DEFAULT_SETTINGS = Object.freeze({ activeId: null, tint: 0, opacity: 0.5, blur: 0 })
+export const DEFAULT_SETTINGS = Object.freeze({
+  activeId: null,
+  tint: 0,
+  backgroundOpacity: 0.5,
+  elementOpacity: 0.5,
+  blur: 0,
+})
+
+/**
+ * The appearance preferences stored beside the library.
+ * @typedef {object} Settings
+ * @property {string | null} activeId - Background currently painted, or null for none.
+ * @property {number} tint - Darken-to-lighten wash over the photo, from -1 to 1.
+ * @property {number} backgroundOpacity - Alpha of the ground behind the interface, from 0 to 1.
+ * @property {number} elementOpacity - Alpha of the panels, cards and menus raised over that ground, from 0 to 1.
+ * @property {number} blur - Photo blur radius in pixels, from 0 to 24.
+ */
 
 /**
  * One stored background's metadata.
@@ -87,7 +106,7 @@ export function normalizeTint(value) {
   return normalizeNumber(value, -1, 1)
 }
 
-/** @param {unknown} value - Candidate opacity. @returns {number | undefined} Opacity in 0..1, or undefined. */
+/** @param {unknown} value - Candidate alpha. @returns {number | undefined} Surface alpha in 0..1, or undefined. */
 export function normalizeOpacity(value) {
   return normalizeNumber(value, 0, 1)
 }
@@ -127,7 +146,7 @@ export async function createStore({ dir, warn }) {
 
   /** @type {BackgroundItem[]} */
   let items = []
-  /** @type {{ activeId: string | null, tint: number, opacity: number, blur: number }} */
+  /** @type {Settings} */
   let settings = { ...DEFAULT_SETTINGS }
   let writeChain = Promise.resolve()
 
@@ -175,7 +194,11 @@ export async function createStore({ dir, warn }) {
         ? parsed.activeId
         : null,
       tint: normalizeTint(parsed.tint) ?? DEFAULT_SETTINGS.tint,
-      opacity: normalizeOpacity(parsed.opacity) ?? DEFAULT_SETTINGS.opacity,
+      backgroundOpacity: normalizeOpacity(parsed.backgroundOpacity) ?? DEFAULT_SETTINGS.backgroundOpacity,
+      // An index written before the two sliders were split stored one alpha for
+      // every surface. It becomes the element alpha, which is the layer it
+      // mostly controlled; the ground takes the shipped default.
+      elementOpacity: normalizeOpacity(parsed.elementOpacity ?? parsed.opacity) ?? DEFAULT_SETTINGS.elementOpacity,
       blur: normalizeBlur(parsed.blur) ?? DEFAULT_SETTINGS.blur,
     }
     if (discarded > 0) warn(`discarded ${String(discarded)} index record(s) that had no usable image`)
@@ -320,7 +343,7 @@ export async function createStore({ dir, warn }) {
 
     /**
      * Current settings.
-     * @returns {{ activeId: string | null, tint: number, opacity: number, blur: number }} A detached copy.
+     * @returns {Settings} A detached copy.
      */
     settings() {
       return { ...settings }
@@ -328,8 +351,8 @@ export async function createStore({ dir, warn }) {
 
     /**
      * Apply a validated settings patch.
-     * @param {{ activeId?: string | null, tint?: number, opacity?: number, blur?: number }} patch - Fields to replace.
-     * @returns {Promise<{ activeId: string | null, tint: number, opacity: number, blur: number }>} The new settings.
+     * @param {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, blur?: number }} patch - Fields to replace.
+     * @returns {Promise<Settings>} The new settings.
      * @throws {Error} When `activeId` names an item that does not exist.
      */
     async updateSettings(patch) {
@@ -340,7 +363,8 @@ export async function createStore({ dir, warn }) {
           settings.activeId = next
         }
         if (patch.tint !== undefined) settings.tint = patch.tint
-        if (patch.opacity !== undefined) settings.opacity = patch.opacity
+        if (patch.backgroundOpacity !== undefined) settings.backgroundOpacity = patch.backgroundOpacity
+        if (patch.elementOpacity !== undefined) settings.elementOpacity = patch.elementOpacity
         if (patch.blur !== undefined) settings.blur = patch.blur
         return { ...settings }
       })

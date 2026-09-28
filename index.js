@@ -11,7 +11,7 @@
  * - `GET    /images/<id>`     the stored bytes, immutably cacheable
  * - `PATCH  /images/<id>`     rename
  * - `DELETE /images/<id>`     delete
- * - `PATCH  /state`           active background, tint, opacity, blur
+ * - `PATCH  /state`           active background, tint, both surface alphas, blur
  *
  * The module imports `node:` builtins only: it must load on a released `dsh`,
  * where no workspace resolution or build step is available for an out-of-tree
@@ -284,7 +284,8 @@ export async function apply(ctx, config) {
     // panel's Reset controls land here, so both halves read one definition.
     defaults: {
       tint: DEFAULT_SETTINGS.tint,
-      opacity: DEFAULT_SETTINGS.opacity,
+      backgroundOpacity: DEFAULT_SETTINGS.backgroundOpacity,
+      elementOpacity: DEFAULT_SETTINGS.elementOpacity,
       blur: DEFAULT_SETTINGS.blur,
     },
     limits: {
@@ -314,7 +315,7 @@ export async function apply(ctx, config) {
   const handleState = async (req, res) => {
     if (req.method !== 'PATCH') return methodNotAllowed(res, 'PATCH')
     const body = /** @type {Record<string, unknown>} */ (await readJson(req))
-    /** @type {{ activeId?: string | null, tint?: number, opacity?: number, blur?: number }} */
+    /** @type {{ activeId?: string | null, tint?: number, backgroundOpacity?: number, elementOpacity?: number, blur?: number }} */
     const patch = {}
     if ('activeId' in body) {
       const activeId = body.activeId
@@ -331,10 +332,15 @@ export async function apply(ctx, config) {
       if (tint === undefined) return writeText(res, 400, 'tint must be a number from -1 to 1')
       patch.tint = tint
     }
-    if ('opacity' in body) {
-      const opacity = normalizeOpacity(body.opacity)
-      if (opacity === undefined) return writeText(res, 400, 'opacity must be a number from 0 to 1')
-      patch.opacity = opacity
+    if ('backgroundOpacity' in body) {
+      const backgroundOpacity = normalizeOpacity(body.backgroundOpacity)
+      if (backgroundOpacity === undefined) return writeText(res, 400, 'backgroundOpacity must be a number from 0 to 1')
+      patch.backgroundOpacity = backgroundOpacity
+    }
+    if ('elementOpacity' in body) {
+      const elementOpacity = normalizeOpacity(body.elementOpacity)
+      if (elementOpacity === undefined) return writeText(res, 400, 'elementOpacity must be a number from 0 to 1')
+      patch.elementOpacity = elementOpacity
     }
     if ('blur' in body) {
       const blur = normalizeBlur(body.blur)

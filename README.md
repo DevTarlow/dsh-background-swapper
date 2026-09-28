@@ -11,7 +11,7 @@ Two different backgrounds. The space photo on the right has **Blur** turned up.
 
 **Swap Background** sits just above Settings in the left sidebar. Click it and a
 small panel opens where you add a photo, give it a name, and keep a set of
-favorites. Three sliders control how the photo looks and how much of it shows
+favorites. Four sliders control how the photo looks and how much of it shows
 through the interface.
 
 ## What you can do
@@ -22,10 +22,13 @@ through the interface.
   six to a page. Click one to switch to it.
 - **Rename or delete.** A pencil renames an entry, a bin deletes it, and
   **Remove all photos** empties the library.
+- **Background opacity.** How solid the page behind everything is. Lower it and
+  the photo fills the open space; at 0% the photo is bare. It starts at 50%.
+- **Element opacity.** How solid the sidebar, cards and menus over that page are.
+  Raise it to keep text readable while the photo stays bright behind them. It
+  starts at 50%.
 - **Tint.** One slider from *Darken 100%* to *Lighten 100%*, for when text is
   hard to read over a bright photo.
-- **Element opacity.** Makes the interface see-through so the photo shows behind
-  it. It starts at 50%.
 - **Blur.** Softens the photo, from 0 to 24 pixels.
 - **Turn off.** Hides the photo and puts the interface back the way it was.
   Nothing is deleted.
@@ -53,7 +56,7 @@ you remove it.
 
 ## Using it
 
-![The Background panel: the current photo, the upload area, the three Appearance sliders, and the Recent library](screenshot2.png)
+![The Background panel: the current photo, the upload area, the Appearance sliders, and the Recent library](screenshot2.png)
 
 1. Click **Swap Background** above Settings.
 2. Under **Add a photo**, drop an image on the dashed box or press
@@ -110,18 +113,26 @@ profile's patch file instead, so a later reinstall cannot replace it:
     maxImageBytes: 33554432
 ```
 
-A new install starts with **Tint** *None*, **Element opacity** 50%, and **Blur**
-off. The **Reset** link beside each slider returns it to those values.
+A new install starts with **Background opacity** and **Element opacity** both at
+50%, **Tint** *None*, and **Blur** off. The **Reset** link beside each slider
+returns it to those values.
 
 ## Common questions
 
-**The photo is too faint, or too strong.** Use **Element opacity**. Lower shows
-more photo, higher makes the interface more solid. At 100% the interface is fully
-opaque and you will only see the photo at the edges, so the panel says so when you
-leave the slider there.
+**The photo is too faint, or too strong.** Use **Background opacity**. Lower
+shows more photo in the open page, higher makes that page more solid. At 100% the
+photo only shows through the panels; with **Element opacity** at 100% as well
+nothing shows at all, and the panel says so.
 
-**Text is hard to read over the photo.** Set **Tint** to darken it. Dimming the
-photo helps more than making the interface solid, because you keep the effect.
+**The interface is too see-through to read.** Raise **Element opacity**. That
+solidifies the sidebar, cards and menus without taking the photo off the page, so
+you no longer have to choose between the two. The sliders fade different layers:
+**Background opacity** the page everything sits on, **Element opacity** what sits
+on it.
+
+**Text is hard to read over the photo.** Set **Tint** to darken it, or **Blur** to
+soften it. Both keep the effect; raising **Element opacity** only hides more of
+the photo behind the panels.
 
 **Why is the sidebar darker than the rest?** Two see-through surfaces sit behind
 the sidebar and only one behind the main area, so at the same slider setting the
@@ -165,8 +176,10 @@ Things to know before changing it:
 - **The photo is painted on `html::before`**, a fixed pseudo-element behind
   everything, so the application's own elements are left alone.
 - **The see-through effect redefines the theme's background variables**, using
-  `color-mix()` of the same palette tones they already point to. No application
-  class name is targeted, so renaming one breaks nothing.
+  `color-mix()` of the same palette tones they already point to. The aliases are
+  split into the ground the frame and body paint and the panels raised over it,
+  and each slider fades one group. No application class name is targeted, so
+  renaming one breaks nothing.
 - **Everything the plugin adds is React-rendered**, so unloading it restores the
   interface exactly. Nothing writes to `document.body` or appends a stylesheet
   by hand.

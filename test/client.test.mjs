@@ -14,7 +14,10 @@ assert.equal(captured.id, 'dsh-background-swapper')
 assert.equal(typeof captured.factory, 'function')
 
 const hooks = {
-  state: () => [{ items: [], activeId: null, opacity: 1, blur: 0, tint: 0, limits: {}, error: null, status: 'ready' }, () => {}],
+  state: () => [{
+    items: [], activeId: null, backgroundOpacity: 1, elementOpacity: 1, blur: 0, tint: 0,
+    limits: {}, error: null, status: 'ready',
+  }, () => {}],
 }
 const React = {
   createElement: (type, props, ...children) => ({ type, props, children }),
@@ -41,7 +44,9 @@ globalThis.fetch = async (url, options) => {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ ok: true, items: [], activeId: null, tint: 0, opacity: 1, blur: 0, limits: {} }),
+    json: async () => ({
+      ok: true, items: [], activeId: null, tint: 0, backgroundOpacity: 1, elementOpacity: 1, blur: 0, limits: {},
+    }),
     text: async () => '',
   }
 }
@@ -87,10 +92,14 @@ let painterValue = 'unset'
 painterValue = registered[0].component({})
 assert.equal(painterValue, null, 'no active background must paint no style element')
 
-hooks.state = () => [{
-  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', opacity: 0.5, blur: 8, tint: -0.4,
-  limits: {}, error: null, status: 'ready',
+// One snapshot with an active background, so each painted assertion reads a
+// whole set of slider values.
+const stateWith = (backgroundOpacity, elementOpacity, extra) => [{
+  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', backgroundOpacity, elementOpacity, blur: 0, tint: 0,
+  limits: {}, error: null, status: 'ready', ...extra,
 }, () => {}]
+
+hooks.state = () => stateWith(0.5, 0.5, { blur: 8, tint: -0.4 })
 const painted = registered[0].component({})
 assert.equal(painted.type, 'style')
 const css = painted.children[0]
@@ -99,33 +108,42 @@ assert.match(css, /url\("\/__background-swapper\/images\/abc"\)/)
 assert.match(css, /filter: blur\(8px\)/)
 assert.match(css, /rgba\(0, 0, 0, 0\.340\)/)
 assert.match(css, /body \{ --dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 50%, transparent\);/)
+assert.match(css, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-50\) 50%, transparent\);/)
 assert.match(css, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
 assert.match(css, /body\[data-ds-dark-theme\] \{ --dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-950\) 50%, transparent\);/)
+assert.match(css, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-900\) 50%, transparent\);/)
 
-// The ends of the opacity slider: 100% restores the stock opaque surfaces
-// (which is why a fresh library must not start there), and 0% leaves the
-// photo bare while menus and dialogs keep their 90% floor.
-const stateWith = opacity => [{
-  items: [{ id: 'abc', name: 'Test' }], activeId: 'abc', opacity, blur: 0, tint: 0,
-  limits: {}, error: null, status: 'ready',
-}, () => {}]
+// The two sliders fade different layers, which is the whole point: the
+// background alpha moves the ground alone, the element alpha the panels, cards
+// and menus raised over it, so a bare ground can sit under solid panels.
+hooks.state = () => stateWith(0.25, 0.75)
+const split = registered[0].component({}).children[0]
+assert.match(split, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 25%, transparent\);/)
+assert.match(split, /--dsw-specific-sidebar-fill: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-50\) 75%, transparent\);/)
+assert.match(split, /--dsw-alias-bg-layer-3: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-800\) 75%, transparent\);/)
+// A menu or dialog keeps its own floor; the floor is per token, not a cap on
+// the group, so raising element opacity past it still raises the overlay.
+assert.match(split, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
 
-hooks.state = () => stateWith(1)
+// The ends of both sliders: 100% restores the stock opaque surfaces (which is
+// why a fresh library must not start there), and 0% leaves the photo bare in
+// that layer while the other layer is untouched.
+hooks.state = () => stateWith(1, 1)
 const opaque = registered[0].component({}).children[0]
 assert.match(opaque, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 100%, transparent\);/)
 // The overlay floor is a minimum, not a cap, so 100% stays the stock value.
 assert.match(opaque, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 100%, transparent\);/)
 assert.doesNotMatch(opaque, /rgba\(0, 0, 0,/)
 
-hooks.state = () => stateWith(0)
+hooks.state = () => stateWith(0, 0)
 const bare = registered[0].component({}).children[0]
 assert.match(bare, /--dsw-alias-bg-base: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-00\) 0%, transparent\);/)
 assert.match(bare, /--dsw-alias-bg-overlay: color-mix\(in srgb, var\(--dsw-static-neutral-bluish-150\) 90%, transparent\);/)
 
 // A tint at the ends of its range: full dark and full light, never opaque.
-hooks.state = () => [{ ...stateWith(0.5)[0], tint: -1 }, () => {}]
+hooks.state = () => stateWith(0.5, 0.5, { tint: -1 })
 assert.match(registered[0].component({}).children[0], /rgba\(0, 0, 0, 0\.850\)/)
-hooks.state = () => [{ ...stateWith(0.5)[0], tint: 1 }, () => {}]
+hooks.state = () => stateWith(0.5, 0.5, { tint: 1 })
 assert.match(registered[0].component({}).children[0], /rgba\(255, 255, 255, 0\.850\)/)
 
 console.log('client half: all assertions passed')

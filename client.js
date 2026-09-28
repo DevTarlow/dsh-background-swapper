@@ -62,9 +62,11 @@ window.__ModuleLoader__.load({
       tintNone: 'None',
       tintDarken: percent => `Darken ${percent}%`,
       tintLighten: percent => `Lighten ${percent}%`,
-      opacity: 'Element opacity',
-      opacityHint: 'Fades every surface so the photo shows through.',
-      solidHint: 'The interface is fully opaque, so the photo is hidden behind it. Lower Element opacity below to see it.',
+      backgroundOpacity: 'Background opacity',
+      backgroundHint: 'Lower shows more photo in the open page.',
+      elementOpacity: 'Element opacity',
+      elementHint: 'Higher keeps the sidebar and cards readable.',
+      solidHint: 'Everything is fully opaque, so the photo is hidden. Lower Background opacity to see it.',
       blur: 'Blur',
       reset: 'Reset',
       removeAll: 'Remove all photos',
@@ -78,18 +80,31 @@ window.__ModuleLoader__.load({
       off: 'Off',
     }
 
-    /** Surface alias tokens the opacity slider fades, with the static palette tone each maps to. */
-    const SURFACE_TOKENS = [
-      ['--dsw-alias-bg-base', '00', '950'],
-      ['--dsw-specific-sidebar-fill', '50', '900'],
-      ['--dsw-alias-bg-layer-1', '00', '875'],
-      ['--dsw-alias-bg-layer-2', '00', '850'],
-      ['--dsw-alias-bg-layer-3', '00', '800'],
-      ['--dsw-alias-bg-overlay', '150', '700'],
+    /** Smallest alpha percent applied to surfaces that must stay readable. */
+    const OVERLAY_FLOOR = 90
+
+    /**
+     * The ground the frame and body paint, faded by the Background opacity
+     * slider. It is the one surface the photo lies directly under, so this is
+     * the slider that decides how much of the photo the open page shows.
+     */
+    const BACKGROUND_TOKENS = [
+      ['--dsw-alias-bg-base', '00', '950', 0],
     ]
 
-    /** Smallest opacity percent applied to surfaces that must stay readable. */
-    const OVERLAY_FLOOR = 90
+    /**
+     * The surfaces raised over that ground, faded by the Element opacity
+     * slider: the sidebar, cards, inputs, code blocks and menus. Each carries
+     * the static palette tone it maps to and the smallest alpha it may take, so
+     * a dialog or menu cannot be faded into unreadability.
+     */
+    const ELEMENT_TOKENS = [
+      ['--dsw-specific-sidebar-fill', '50', '900', 0],
+      ['--dsw-alias-bg-layer-1', '00', '875', 0],
+      ['--dsw-alias-bg-layer-2', '00', '850', 0],
+      ['--dsw-alias-bg-layer-3', '00', '800', 0],
+      ['--dsw-alias-bg-overlay', '150', '700', OVERLAY_FLOOR],
+    ]
 
     /**
      * Placeholder settings and slider defaults used only until the host answers
@@ -98,7 +113,7 @@ window.__ModuleLoader__.load({
      * overwritten by the first `GET /list` that resolves.
      */
     const UNKNOWN = Object.freeze({
-      settings: Object.freeze({ tint: 0, opacity: 0.5, blur: 0 }),
+      settings: Object.freeze({ tint: 0, backgroundOpacity: 0.5, elementOpacity: 0.5, blur: 0 }),
       limits: Object.freeze({ pageSize: 6, maxImageBytes: 16 * 1024 * 1024, maxDimension: 2560, maxNameLength: 80 }),
     })
 
@@ -148,7 +163,8 @@ window.__ModuleLoader__.load({
     /** Whether a payload member carries a complete set of slider defaults. */
     function isSettings(value) {
       return typeof value === 'object' && value !== null
-        && typeof value.tint === 'number' && typeof value.opacity === 'number' && typeof value.blur === 'number'
+        && typeof value.tint === 'number' && typeof value.backgroundOpacity === 'number'
+        && typeof value.elementOpacity === 'number' && typeof value.blur === 'number'
     }
 
     // ── host transport ──────────────────────────────────────────────────────
@@ -184,7 +200,12 @@ window.__ModuleLoader__.load({
         items: Array.isArray(payload.items) ? payload.items : [],
         activeId: typeof payload.activeId === 'string' ? payload.activeId : null,
         tint: typeof payload.tint === 'number' ? payload.tint : UNKNOWN.settings.tint,
-        opacity: typeof payload.opacity === 'number' ? payload.opacity : UNKNOWN.settings.opacity,
+        backgroundOpacity: typeof payload.backgroundOpacity === 'number'
+          ? payload.backgroundOpacity
+          : UNKNOWN.settings.backgroundOpacity,
+        elementOpacity: typeof payload.elementOpacity === 'number'
+          ? payload.elementOpacity
+          : UNKNOWN.settings.elementOpacity,
         blur: typeof payload.blur === 'number' ? payload.blur : UNKNOWN.settings.blur,
         defaults: isSettings(payload.defaults) ? payload.defaults : snapshot.defaults,
         limits: payload.limits === undefined ? snapshot.limits : { ...snapshot.limits, ...payload.limits },
@@ -236,26 +257,42 @@ window.__ModuleLoader__.load({
 
     // ── background painting ─────────────────────────────────────────────────
 
+    /** A 0-1 alpha as the whole-number percent `color-mix()` takes. */
+    function alphaPercent(value) {
+      return Math.max(0, Math.min(100, Math.round(value * 100)))
+    }
+
     /**
-     * The rules that paint the active photo and fade the surfaces above it.
+     * Mix one group of surface aliases from the stock palette tone at an alpha.
+     * @param {number} percent - Alpha to paint the whole group at, 0-100.
+     * @param {ReadonlyArray<readonly [string, string, string, number]>} tokens - Alias, light tone, dark tone, and the smallest alpha it may take.
+     * @returns {{ light: string[], dark: string[] }} Declarations for the light and the dark theme.
+     */
+    function surfaceRules(percent, tokens) {
+      const light = []
+      const dark = []
+      for (const [alias, lightTone, darkTone, floor] of tokens) {
+        // The slider is a preference, not a measured composited alpha: several
+        // tokens are painted by nested surfaces, so the stacked result reads
+        // denser than the number. A token's floor overrides it where the
+        // surface has to stay legible.
+        const tone = Math.max(floor, percent)
+        light.push(`${alias}: color-mix(in srgb, var(--dsw-static-neutral-bluish-${lightTone}) ${tone}%, transparent);`)
+        dark.push(`${alias}: color-mix(in srgb, var(--dsw-static-neutral-bluish-${darkTone}) ${tone}%, transparent);`)
+      }
+      return { light, dark }
+    }
+
+    /**
+     * The rules that paint the active photo and fade the two layers above it.
      * @param {object} state - Current snapshot.
      * @returns {string | null} CSS text, or null when no background is active.
      */
     function paintCss(state) {
       const item = state.items.find(candidate => candidate.id === state.activeId)
       if (item === undefined) return null
-      const surface = Math.max(0, Math.min(100, Math.round(state.opacity * 100)))
-      const overlay = Math.max(OVERLAY_FLOOR, surface)
-      const light = []
-      const dark = []
-      for (const [alias, lightTone, darkTone] of SURFACE_TOKENS) {
-        // Several tokens are painted by nested surfaces, so the stacked result
-        // reads denser than the number; the slider is a preference, not a
-        // measured composited alpha.
-        const tone = alias === '--dsw-alias-bg-overlay' ? overlay : surface
-        light.push(`${alias}: color-mix(in srgb, var(--dsw-static-neutral-bluish-${lightTone}) ${tone}%, transparent);`)
-        dark.push(`${alias}: color-mix(in srgb, var(--dsw-static-neutral-bluish-${darkTone}) ${tone}%, transparent);`)
-      }
+      const ground = surfaceRules(alphaPercent(state.backgroundOpacity), BACKGROUND_TOKENS)
+      const elements = surfaceRules(alphaPercent(state.elementOpacity), ELEMENT_TOKENS)
       const blur = Math.max(0, Math.min(24, state.blur))
       const tint = state.tint < 0
         ? `rgba(0, 0, 0, ${(-state.tint * 0.85).toFixed(3)})`
@@ -277,8 +314,8 @@ window.__ModuleLoader__.load({
         '  background-repeat: no-repeat, no-repeat;',
         `  filter: blur(${blur}px);`,
         '}',
-        `body { ${light.join(' ')} }`,
-        `body[data-ds-dark-theme] { ${dark.join(' ')} }`,
+        `body { ${[...ground.light, ...elements.light].join(' ')} }`,
+        `body[data-ds-dark-theme] { ${[...ground.dark, ...elements.dark].join(' ')} }`,
       ].join('\n')
     }
 
@@ -287,7 +324,7 @@ window.__ModuleLoader__.load({
       const state = useSnapshot()
       const css = useMemo(
         () => paintCss(state),
-        [state.activeId, state.opacity, state.blur, state.tint, state.items],
+        [state.activeId, state.backgroundOpacity, state.elementOpacity, state.blur, state.tint, state.items],
       )
       if (css === null) return null
       return h('style', { 'data-background-swapper': '' }, css)
@@ -745,7 +782,7 @@ window.__ModuleLoader__.load({
                     className: 'dsh-bgs-small',
                     onClick: () => { pick(null) },
                   }, STRINGS.turnOff)),
-                state.opacity >= 0.99
+                state.backgroundOpacity >= 0.99 && state.elementOpacity >= 0.99
                   ? h('p', { className: 'dsh-bgs-note' }, STRINGS.solidHint)
                   : null)),
 
@@ -814,9 +851,44 @@ window.__ModuleLoader__.load({
 
           // Appearance sits above the library on purpose: the sliders are the
           // controls a photo is tuned with, and a long grid below them would
-          // push them off the fold.
+          // push them off the fold. The two alphas lead as a pair, ground first,
+          // because they are the two halves of one decision — how much photo,
+          // how solid the interface — and reading them apart is the whole point
+          // of the split.
           h('section', { className: 'dsh-bgs-section' },
             h('h3', { className: 'dsh-bgs-heading' }, STRINGS.appearance),
+            h(RangeRow, {
+              label: STRINGS.backgroundOpacity,
+              hint: STRINGS.backgroundHint,
+              min: 0,
+              max: 100,
+              value: Math.round(state.backgroundOpacity * 100),
+              readout: `${Math.round(state.backgroundOpacity * 100)}%`,
+              onReset: state.backgroundOpacity === state.defaults.backgroundOpacity ? undefined : () => {
+                publish({ backgroundOpacity: state.defaults.backgroundOpacity })
+                persistSettings({ backgroundOpacity: state.defaults.backgroundOpacity })
+              },
+              onChange: next => {
+                publish({ backgroundOpacity: next / 100 })
+                persistSettings({ backgroundOpacity: next / 100 })
+              },
+            }),
+            h(RangeRow, {
+              label: STRINGS.elementOpacity,
+              hint: STRINGS.elementHint,
+              min: 0,
+              max: 100,
+              value: Math.round(state.elementOpacity * 100),
+              readout: `${Math.round(state.elementOpacity * 100)}%`,
+              onReset: state.elementOpacity === state.defaults.elementOpacity ? undefined : () => {
+                publish({ elementOpacity: state.defaults.elementOpacity })
+                persistSettings({ elementOpacity: state.defaults.elementOpacity })
+              },
+              onChange: next => {
+                publish({ elementOpacity: next / 100 })
+                persistSettings({ elementOpacity: next / 100 })
+              },
+            }),
             h(RangeRow, {
               label: STRINGS.tint,
               min: -100,
@@ -830,22 +902,6 @@ window.__ModuleLoader__.load({
               onChange: next => {
                 publish({ tint: next / 100 })
                 persistSettings({ tint: next / 100 })
-              },
-            }),
-            h(RangeRow, {
-              label: STRINGS.opacity,
-              hint: STRINGS.opacityHint,
-              min: 0,
-              max: 100,
-              value: Math.round(state.opacity * 100),
-              readout: `${Math.round(state.opacity * 100)}%`,
-              onReset: state.opacity === state.defaults.opacity ? undefined : () => {
-                publish({ opacity: state.defaults.opacity })
-                persistSettings({ opacity: state.defaults.opacity })
-              },
-              onChange: next => {
-                publish({ opacity: next / 100 })
-                persistSettings({ opacity: next / 100 })
               },
             }),
             h(RangeRow, {
